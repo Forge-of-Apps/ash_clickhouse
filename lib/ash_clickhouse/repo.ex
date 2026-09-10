@@ -7,6 +7,14 @@ defmodule AshClickhouse.Repo do
   You can use `Ecto.Repo`'s `init/2` to configure your repo like normal, but
   instead of returning `{:ok, config}`, use `super(config)` to pass the
   configuration to the `AshClickhouse.Repo` implementation.
+
+  Starting a repo also settles `:ecto_ch`'s `default_table_engine` on
+  `MergeTree`, unless the application has already chosen one. `ecto_ch` would
+  otherwise default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator`
+  runs a migration's `down` and then cannot remove its version row from
+  `schema_migrations`, leaving the schema changed but still recorded as
+  applied. Every table the migration generator writes names its own engine, so
+  the default only ever reaches `schema_migrations` itself.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"
@@ -37,6 +45,10 @@ defmodule AshClickhouse.Repo do
       def drop?, do: true
 
       def init(_, config) do
+        if is_nil(Application.get_env(:ecto_ch, :default_table_engine)) do
+          Application.put_env(:ecto_ch, :default_table_engine, "MergeTree")
+        end
+
         new_config =
           config
           |> Keyword.put(:installed_extensions, installed_extensions())

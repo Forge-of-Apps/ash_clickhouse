@@ -70,6 +70,15 @@ that would silently destroy data:
 
 Each is a data migration. Write it by hand.
 
+## schema_migrations
+
+Starting an `AshClickhouse.Repo` settles `ecto_ch`'s `default_table_engine` on
+`MergeTree` unless the application has already chosen one. `ecto_ch` would
+otherwise default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator`
+runs a migration's `down` and then cannot remove its version row, leaving the
+schema changed but still recorded as applied. Every generated table names its
+own engine, so the default only ever reaches `schema_migrations`.
+
 ## Running the tests
 
 The suite needs a ClickHouse server, taken from `CLICKHOUSE_URL` and defaulting
