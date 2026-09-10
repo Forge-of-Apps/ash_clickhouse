@@ -114,17 +114,6 @@ defmodule AshClickhouse.DataLayer do
         type: :string,
         doc:
           "Everything that follows the engine in `CREATE TABLE`, given as raw SQL — the sorting key above all, as in `\"order by (at, id)\"`, and `PARTITION BY` or `TTL` alongside it. `MergeTree` engines require a sorting key. Like the engine, it cannot be changed by a generated migration, and a column it names can be neither dropped nor retyped."
-      ],
-      base_filter_sql: [
-        type: :string,
-        doc:
-          "A raw sql version of the base_filter, e.g `representative = true`. Required if trying to create a unique constraint on a resource with a base_filter"
-      ],
-      migration_defaults: [
-        type: :keyword_list,
-        default: [],
-        doc:
-          "A keyword list of attribute names to the literal SQL of the column's `DEFAULT` expression, e.g `[id: \"generateUUIDv4()\"]`."
       ]
     ]
   }
@@ -192,8 +181,9 @@ defmodule AshClickhouse.DataLayer do
     not enforced by the database and relationships are joins alone.
   * A table's engine and sorting key are fixed at creation, and a column named
     in the sorting key can be neither dropped nor retyped.
-  * Multitenancy is not supported. There is no `manage_tenant` block and the
-    generator writes no per-tenant migrations.
+  * Multitenancy is not supported. There is no `manage_tenant` block, the
+    generator writes no per-tenant migrations, and the mix tasks take no
+    tenant flags.
 
   ## Materialized views
 
