@@ -104,17 +104,6 @@ defmodule AshClickhouse.DataLayer do
       options: [
         type: :string,
         doc: "Options to be passed to the ClickHouse table, e.g. `order_by`"
-      ],
-      base_filter_sql: [
-        type: :string,
-        doc:
-          "A raw sql version of the base_filter, e.g `representative = true`. Required if trying to create a unique constraint on a resource with a base_filter"
-      ],
-      migration_defaults: [
-        type: :keyword_list,
-        default: [],
-        doc:
-          "A keyword list of attribute names to the literal SQL of the column's `DEFAULT` expression, e.g `[id: \"generateUUIDv4()\"]`."
       ]
     ]
   }
