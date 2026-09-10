@@ -110,7 +110,10 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrations do
       snapshots_path
       |> Path.join("*.json")
       |> Path.wildcard()
-      |> Map.new(&{Path.basename(&1, ".json"), &1 |> File.read!() |> Jason.decode!()})
+      |> Map.new(
+        &{Path.basename(&1, ".json"),
+         &1 |> File.read!() |> Jason.decode!() |> MigrationGenerator.normalize()}
+      )
 
     orphans = orphans(old, domains, clickhouse)
     droppable = if opts[:drop_tables], do: orphans, else: MapSet.new()

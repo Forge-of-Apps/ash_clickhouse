@@ -54,6 +54,7 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
         "domain" => domain,
         "engine" => "MergeTree()",
         "options" => "order by id",
+        "materialized_view" => nil,
         "columns" => [%{"name" => "id", "type" => "UUID"}]
       })
     )
@@ -62,13 +63,51 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
   test "a named run writes one migration and a snapshot per migrated table", ctx do
     run(["--name", "initial"], ctx)
 
-    assert ["events.json"] = snapshots(ctx)
+    assert [
+             "event_count_mv.json",
+             "events.json",
+             "events_by_day.json",
+             "events_by_day_mv.json",
+             "raw_select_mv.json"
+           ] = snapshots(ctx)
+
     assert [migration] = migrations(ctx)
     assert migration =~ ~r/^\d{14}_initial\.exs$/
 
     sql = generated_sql(ctx)
     assert sql =~ "CREATE TABLE events"
     assert sql =~ "DROP TABLE events"
+  end
+
+  test "materialized views reach the migration as view DDL", ctx do
+    run(["--name", "initial"], ctx)
+
+    sql = generated_sql(ctx)
+
+    assert sql =~ "CREATE MATERIALIZED VIEW events_by_day_mv TO events_by_day AS SELECT"
+    assert sql =~ "CREATE MATERIALIZED VIEW event_count_mv ENGINE = SummingMergeTree()"
+    assert sql =~ "DROP VIEW events_by_day_mv"
+  end
+
+  test "a view's query reaches the migration as rendered SQL, aliases and all", ctx do
+    run(["--name", "initial"], ctx)
+
+    sql = generated_sql(ctx)
+
+    assert sql =~ ~S|SELECT toDate(e0.\"at\") AS \"day\"|
+    assert sql =~ ~S|FROM \"events\" AS e0 GROUP BY \"day\"|
+  end
+
+  test "views are created after every table and dropped before every one", ctx do
+    run(["--name", "initial"], ctx)
+
+    [up, down] = String.split(generated_sql(ctx), "def down do", parts: 2)
+
+    assert :binary.match(up, "CREATE TABLE") |> elem(0) <
+             :binary.match(up, "CREATE MATERIALIZED VIEW") |> elem(0)
+
+    assert :binary.match(down, "DROP VIEW") |> elem(0) <
+             :binary.match(down, "DROP TABLE") |> elem(0)
   end
 
   test "a resource with migrate? false gets neither DDL nor a snapshot", ctx do
@@ -108,7 +147,14 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
 
     assert [first] = migrations(ctx)
     assert first =~ ~r/^\d{14}_dev_migrate_resources\.exs$/
-    assert ["events.json"] = snapshots(ctx)
+
+    assert [
+             "event_count_mv.json",
+             "events.json",
+             "events_by_day.json",
+             "events_by_day_mv.json",
+             "raw_select_mv.json"
+           ] = snapshots(ctx)
 
     run(["--dev"], ctx)
 
