@@ -1,12 +1,70 @@
 defmodule AshClickhouse.DataLayer do
   @behaviour Ash.DataLayer
 
+  @materialized_view %Spark.Dsl.Section{
+    name: :materialized_view,
+    describe: """
+    Declares that this resource is backed by a ClickHouse materialized view
+    rather than a table.
+
+    A materialized view is an insert trigger on `source`: every block inserted
+    there is run through the view's SELECT and the result written on. With `to`
+    it is written into that table, which some other resource owns; without `to`
+    the view owns its own storage, built from the section's `engine` and
+    `options`.
+
+    The view's columns come from its SELECT, so the resource's attributes are
+    not used to build the DDL — they describe what the SELECT returns and have
+    to match it.
+    """,
+    examples: [
+      """
+      materialized_view do
+        source MyApp.Event
+        to MyApp.EventsByDay
+
+        query fn events ->
+          from e in events,
+            group_by: selected_as(:day),
+            select: %{
+              day: selected_as(fragment("toDate(?)", e.at), :day),
+              events: selected_as(count(), :events)
+            }
+        end
+      end
+      """
+    ],
+    schema: [
+      source: [
+        type: {:or, [{:spark, Ash.Resource}, :string]},
+        required: true,
+        doc:
+          "The resource, or bare table name, whose inserts feed the view. Passed to `query` as its FROM, so the table is named once."
+      ],
+      to: [
+        type: {:or, [{:spark, Ash.Resource}, :string]},
+        doc:
+          "The resource, or bare table name, the view writes into. Without it the view owns its own storage, built from `engine` and `options`."
+      ],
+      query: [
+        type: {:fun, 1},
+        doc:
+          "A function taking the source table name and returning the `Ecto.Query` the view runs over each inserted block. Name every selected column with `selected_as/2`: ClickHouse matches a view's output to its destination by name."
+      ],
+      select: [
+        type: :string,
+        doc:
+          "Raw SQL for the whole SELECT, naming its own FROM. The escape hatch for statements `Ecto.Query` cannot express; prefer `query`."
+      ]
+    ]
+  }
+
   @clickhouse %Spark.Dsl.Section{
     name: :clickhouse,
     describe: """
     Clickhouse data layer configuration
     """,
-    sections: [],
+    sections: [@materialized_view],
     modules: [
       :repo
     ],

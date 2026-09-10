@@ -4,6 +4,7 @@ spark_locals_without_parens = [
   migrate?: 1,
   migration_defaults: 1,
   options: 1,
+  query: 1,
   repo: 1,
   select: 1,
   source: 1,
