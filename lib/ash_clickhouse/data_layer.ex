@@ -51,6 +51,12 @@ defmodule AshClickhouse.DataLayer do
         type: :string,
         doc:
           "A raw sql version of the base_filter, e.g `representative = true`. Required if trying to create a unique constraint on a resource with a base_filter"
+      ],
+      migration_defaults: [
+        type: :keyword_list,
+        default: [],
+        doc:
+          "A keyword list of attribute names to the literal SQL of the column's `DEFAULT` expression, e.g `[id: \"generateUUIDv4()\"]`."
       ]
     ]
   }
@@ -69,10 +75,12 @@ defmodule AshClickhouse.DataLayer do
   alias AshClickhouse.DataLayer.Info
   alias AshClickhouse.ManualRelationship
 
-  # def codegen(args) do
-  #   Mix.Task.reenable("ash_clickhouse.generate_migrations")
-  #   Mix.Task.run("ash_clickhouse.generate_migrations", args)
-  # end
+  def name, do: "AshClickhouse migrations"
+
+  def codegen(args) do
+    Mix.Task.reenable("ash_clickhouse.generate_migrations")
+    Mix.Task.run("ash_clickhouse.generate_migrations", args)
+  end
 
   def rollback(args) do
     {opts, _, _} =
