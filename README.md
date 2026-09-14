@@ -44,23 +44,30 @@ say, which `uuid_primary_key` gives you — cannot be migrated; use `ChUUID`.
 
 ## Migrations
 
-`mix ash.codegen` generates ClickHouse migrations alongside every other
-extension's, by diffing the resources against the snapshots under
-`priv/<repo>/snapshots`. `mix ash_clickhouse.generate_migrations` runs the same
-thing on its own, and `mix ash_clickhouse.migrate` applies the result.
+`mix ash.codegen add_events` generates ClickHouse migrations alongside every
+other extension's, by diffing the resources against the snapshots under
+`priv/resource_snapshots/<repo>/<table>/`.
+`mix ash_clickhouse.generate_migrations` runs the same thing on its own, and
+`mix ash.migrate` applies the result.
+
+The first argument names the migration, as it does in
+`mix ash_postgres.generate_migrations`, and a name is required unless
+`--dry-run`, `--check`, `--dev` or `--auto-name` excuses it.
+
+`--dev` is for a change you are still working on. It writes
+`<timestamp>_<name>_dev.exs` and a matching `_dev` snapshot; the next named run
+rolls those migrations back, deletes them and their snapshots, and writes one
+migration in their place, so iterating leaves no trail of half-steps behind.
+`--check` fails while any are still there.
+
+Migrations are otherwise never rewritten or deleted: one that exists may
+already have been applied, and ClickHouse has no transactional rollback to undo
+it with.
 
 A snapshot no resource claims any more is reported but not dropped. Renaming a
 resource's `table` looks exactly like deleting it, so `DROP TABLE` is opt-in
 through `--drop-tables`; run codegen with it once the data really is
 disposable, and hand-write the rename otherwise.
-
-`--check` fails while a migration generated with `--dev` still carries its
-placeholder name, so one cannot reach a release unnoticed.
-
-Generated migrations are never rewritten or deleted: one that exists may
-already have been applied, and ClickHouse has no transactional rollback to undo
-it with. `--dev` only prefixes the name, marking a migration whose name has not
-been chosen yet.
 
 These changes raise rather than emitting DDL that ClickHouse would reject or
 that would silently destroy data:
@@ -69,6 +76,8 @@ that would silently destroy data:
 - dropping or retyping a column the sorting key names
 
 Each is a data migration. Write it by hand.
+
+`mix ash_clickhouse.generate_migrations` documents the rest of the flags.
 
 ## schema_migrations
 

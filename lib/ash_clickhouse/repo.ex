@@ -15,6 +15,14 @@ defmodule AshClickhouse.Repo do
   `schema_migrations`, leaving the schema changed but still recorded as
   applied. Every table the migration generator writes names its own engine, so
   the default only ever reaches `schema_migrations` itself.
+
+  This settles the engine for databases created from here on. One whose
+  `schema_migrations` already exists keeps the engine it was made with, and a
+  rollback against it still fails on removing the version row. Check with
+  `SELECT engine FROM system.tables WHERE name = 'schema_migrations'`, and
+  recreate the table if it says `TinyLog` — it holds nothing but applied
+  versions, so `CREATE TABLE ... ENGINE = MergeTree ORDER BY version AS SELECT
+  * FROM schema_migrations` under a new name, then swap them, loses nothing.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"

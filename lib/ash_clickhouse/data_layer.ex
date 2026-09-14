@@ -75,8 +75,6 @@ defmodule AshClickhouse.DataLayer do
   alias AshClickhouse.DataLayer.Info
   alias AshClickhouse.ManualRelationship
 
-  def name, do: "AshClickhouse migrations"
-
   def codegen(args) do
     Mix.Task.reenable("ash_clickhouse.generate_migrations")
     Mix.Task.run("ash_clickhouse.generate_migrations", args)
@@ -169,11 +167,11 @@ defmodule AshClickhouse.DataLayer do
 
           if to do
             Mix.Task.run(
-              "ash_clickohouse.rollback",
+              "ash_clickhouse.rollback",
               args ++ ["-r", inspect(repo), "--to", to_string(to)]
             )
 
-            Mix.Task.reenable("ash_clickohouse.rollback")
+            Mix.Task.reenable("ash_clickhouse.rollback")
           end
 
           tenant_files =
@@ -253,11 +251,11 @@ defmodule AshClickhouse.DataLayer do
 
               if to do
                 Mix.Task.run(
-                  "ash_clickohouse.rollback",
+                  "ash_clickhouse.rollback",
                   args ++ ["--tenants", "-r", inspect(repo), "--to", to]
                 )
 
-                Mix.Task.reenable("ash_clickohouse.rollback")
+                Mix.Task.reenable("ash_clickhouse.rollback")
               end
             end
           end
