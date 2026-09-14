@@ -1,8 +1,12 @@
 # AshClickhouse
 
-A ClickHouse data layer for [Ash](https://ash-hq.org), forked from
+A ClickHouse data layer for [Ash](https://hexdocs.pm/ash), built on
+[ecto_ch](https://hexdocs.pm/ecto_ch). Forked from
 [monoflow-ayvu/ash_clickhouse](https://github.com/monoflow-ayvu/ash_clickhouse)
 and extended with a migration generator and materialized views.
+
+The reference documentation lives in the modules themselves — `h AshClickhouse`
+in IEx, or `mix docs`. This is the tour.
 
 ## Installation
 
@@ -16,141 +20,82 @@ def deps do
 end
 ```
 
-## Declaring a table
+## A resource
 
 ```elixir
+defmodule MyApp.ClickhouseRepo do
+  use AshClickhouse.Repo, otp_app: :my_app
+end
+
 defmodule MyApp.Event do
   use Ash.Resource, domain: MyApp.Analytics, data_layer: AshClickhouse.DataLayer
 
   clickhouse do
     repo MyApp.ClickhouseRepo
     table "events"
-    engine "MergeTree()"
-    options "order by id"
+    options "order by (at, id)"
   end
 
   attributes do
-    attribute :id, AshClickhouse.Type.ChUUID, primary_key?: true, allow_nil?: false
-    attribute :name, AshClickhouse.Type.ChString, allow_nil?: false
+    attribute :id, AshClickhouse.Type.ChUUID,
+      primary_key?: true, allow_nil?: false, default: &Ash.UUIDv7.generate/0
+
+    attribute :name, AshClickhouse.Type.ChString
     attribute :amount, AshClickhouse.Type.ChUint32
+    attribute :at, AshClickhouse.Type.ChDateTime64, constraints: [precision: 6]
   end
 end
 ```
 
-Column types come from the `AshClickhouse.Type.Ch*` modules, whose constraints
-choose the ClickHouse type: `nullable?`, `low_cardinality?`, `precision` and so
-on. An attribute whose type has no ClickHouse storage type — `Ash.Type.UUID`,
-say, which `uuid_primary_key` gives you — cannot be migrated; use `ChUUID`.
+Add the repo to `:ecto_repos` and configure it as any Ecto repo, and
+`mix ash.setup`, `mix ash.codegen` and `mix ash.migrate` cover it alongside
+every other data layer.
 
-## Declaring a materialized view
+`AshClickhouse.DataLayer` documents the whole `clickhouse` DSL and what
+ClickHouse will not do for you — no transactions, no foreign keys, and no
+updates worth declaring. Column types are the `AshClickhouse.Type.Ch*` modules,
+whose constraints choose the ClickHouse type rather than only validating the
+value; each documents its own.
 
-A materialized view is an insert trigger on `source`: every block inserted
-there is run through the view's SELECT and the result written on. With `to` it
-is written into a table some other resource owns; without `to` the view owns
-its own storage, built from the section's `engine` and `options`.
+## A materialized view
+
+A view is a resource whose `clickhouse` block holds a `materialized_view`
+section. Its SELECT is written as an `Ecto.Query` and rendered to SQL at
+codegen time:
 
 ```elixir
-defmodule MyApp.EventsByDayMv do
-  use Ash.Resource, domain: MyApp.Analytics, data_layer: AshClickhouse.DataLayer
+materialized_view do
+  source MyApp.Event
+  to MyApp.EventsByDay
 
-  import Ecto.Query
-
-  clickhouse do
-    repo MyApp.ClickhouseRepo
-    table "events_by_day_mv"
-
-    materialized_view do
-      source MyApp.Event
-      to MyApp.EventsByDay
-
-      query fn events ->
-        from e in events,
-          group_by: selected_as(:day),
-          select: %{
-            day: selected_as(fragment("toDate(?)", e.at), :day),
-            events: selected_as(count(), :events)
-          }
-      end
-    end
-  end
-
-  attributes do
-    attribute :day, AshClickhouse.Type.ChDate
-    attribute :events, AshClickhouse.Type.ChUint64
+  query fn events ->
+    from e in events,
+      group_by: selected_as(:day),
+      select: %{
+        day: selected_as(fragment("toDate(?)", e.at), :day),
+        events: selected_as(count(), :events)
+      }
   end
 end
 ```
 
-`source` and `to` take a resource or a bare table name. `query` receives the
-source table and returns the `Ecto.Query` the view runs, rendered to SQL
-through `ecto_ch` at codegen time — no repo has to be running, because a view's
-SELECT is DDL rather than a query anyone executes. Reach for `fragment/1` where
-Ecto has no syntax for a ClickHouse function, and for `select` with raw SQL
-where it has none for the statement.
-
-A view's SELECT is stored once, so it can carry no bound parameters: a pinned
-`^value` is refused, while a literal is written into the SQL.
-
-**Name every selected column with `selected_as/2`.** ClickHouse matches a
-view's output to its destination table by column name, filling anything
-unmatched with that column's default rather than failing, and an unaliased
-column arrives as `toDate(at)` and matches nothing. A name the destination does
-not have is refused for the same reason — it would be computed on every insert
-and then dropped. A destination column the SELECT skips is left to its default,
-which is a legitimate thing to want.
-
-Prefer `to`. Redefining a view means dropping and recreating it, which costs
-nothing when the data lives in a table the view does not own, and costs
-everything the view has accumulated when it does — so the generator refuses
-the latter.
-
-The view's columns come from its SELECT, so the resource's attributes are not
-used to build the DDL. They describe what the SELECT returns and have to match
-it.
+See `AshClickhouse.MaterializedView` for why every column needs
+`selected_as/2`, why the query can carry no bound parameters, and when to reach
+for raw SQL instead.
 
 ## Migrations
 
-`mix ash.codegen` generates ClickHouse migrations alongside every other
-extension's, by diffing the resources against the snapshots under
-`priv/<repo>/snapshots`. `mix ash_clickhouse.generate_migrations` runs the same
-thing on its own, and `mix ash_clickhouse.migrate` applies the result.
+`mix ash.codegen` diffs the resources against snapshots under
+`priv/<repo>/snapshots` and writes a migration; `mix ash.migrate` applies it.
+`mix ash_clickhouse.generate_migrations` and `mix ash_clickhouse.migrate` do
+the same for this data layer alone.
 
-Statements are ordered by direction: views are dropped before tables and
-created after them, so neither direction leaves a view pointing at a table that
-is not there. A view reading another view is not ordered — declare the reader's
-`source` first, or split the two across migrations.
-
-A snapshot no resource claims any more is reported but not dropped. Renaming a
-resource's `table` looks exactly like deleting it, so `DROP TABLE` is opt-in
-through `--drop-tables`; run codegen with it once the data really is
-disposable, and hand-write the rename otherwise.
-
-`--check` fails while a migration generated with `--dev` still carries its
-placeholder name, so one cannot reach a release unnoticed.
-
-Generated migrations are never rewritten or deleted: one that exists may
-already have been applied, and ClickHouse has no transactional rollback to undo
-it with. `--dev` only prefixes the name, marking a migration whose name has not
-been chosen yet.
-
-These changes raise rather than emitting DDL that ClickHouse would reject or
-that would silently destroy data:
-
-- changing a table's engine or sorting key
-- dropping or retyping a column the sorting key names
-- redefining a materialized view that owns its storage
-- turning a table into a view, or a view into a table
-
-Each is a data migration. Write it by hand.
-
-## schema_migrations
-
-Starting an `AshClickhouse.Repo` settles `ecto_ch`'s `default_table_engine` on
-`MergeTree` unless the application has already chosen one. `ecto_ch` would
-otherwise default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator`
-runs a migration's `down` and then cannot remove its version row, leaving the
-schema changed but still recorded as applied. Every generated table names its
-own engine, so the default only ever reaches `schema_migrations`.
+ClickHouse has no transactional rollback, so the generator refuses to emit
+anything that would fail halfway or destroy data — a changed engine or sorting
+key, a dropped or retyped sorting-key column, a redefined view that owns its
+storage. `AshClickhouse.MigrationGenerator` documents each refusal;
+`mix ash_clickhouse.generate_migrations` documents the `--drop-tables`,
+`--dev` and `--check` flags.
 
 ## Running the tests
 

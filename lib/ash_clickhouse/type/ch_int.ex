@@ -26,7 +26,8 @@ for size <- [8, 16, 32, 64, 128, 256] do
     @moduledoc """
     Represents a simple integer
 
-    A builtin type that can be referenced via `:ch_int#{size}`
+    Registered as `:ch_int#{size}` where short type names are configured (see
+    `AshClickhouse`); an attribute can always name this module instead.
 
     ### Constraints
 

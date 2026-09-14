@@ -18,7 +18,8 @@ defmodule AshClickhouse.Type.ChIPv4 do
   @moduledoc """
   Represents an IPv4 address.
 
-  A builtin type that can be referenced via `:ipv4`
+  Registered as `:ch_ipv4` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

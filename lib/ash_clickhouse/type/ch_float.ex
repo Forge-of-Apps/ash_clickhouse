@@ -37,7 +37,8 @@ for size <- [32, 64] do
     @moduledoc """
     Represents a float#{size} (floating point number)
 
-    A builtin type that be referenced via `:ch_float#{size}`
+    Registered as `:ch_float#{size}` where short type names are configured (see
+    `AshClickhouse`); an attribute can always name this module instead.
 
     ### Constraints
 

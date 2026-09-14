@@ -6,6 +6,9 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrations do
   ClickHouse migrations are generated in the same run as every other
   extension's. Run it directly to generate only these.
 
+  `AshClickhouse.MigrationGenerator` does the diffing and documents the changes
+  it refuses to generate.
+
   A migration's version is a second-resolution timestamp, bumped until no file
   in the directory already claims it, and doubles as the suffix of the module
   name, so neither the filename, the Ecto version nor the module can collide
@@ -33,8 +36,8 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrations do
       domain outside the run is never dropped.
     * `--migrations-path` and `--snapshot-path` write elsewhere than the repo's
       own directories. Snapshots are repo state rather than migration-directory
-      state, so the two are independent: pointing migrations at the nested
-      `migrations/tenants` directory leaves the snapshots where they were.
+      state, so the two are independent: pointing migrations at another
+      directory leaves the snapshots where they were.
 
   Resources opt in through `migrate?` in their `clickhouse` section. A repo is
   still visited when every one of its resources has opted out, because the

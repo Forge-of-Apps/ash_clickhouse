@@ -14,7 +14,8 @@ defmodule AshClickhouse.Type.ChTime64 do
   @moduledoc """
   Represents a time in the database, with a 'microsecond' precision
 
-  A builtin type that can be referenced via `:ch_time64`
+  Registered as `:ch_time64` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

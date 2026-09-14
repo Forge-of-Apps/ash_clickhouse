@@ -2,6 +2,9 @@ defmodule AshClickhouse.MaterializedView do
   @moduledoc """
   Turns a resource's `materialized_view` block into the SELECT its DDL carries.
 
+  The block's options are documented with the rest of the DSL, in
+  `AshClickhouse.DataLayer`.
+
   The block's `query` is a function of the source table name returning an
   `Ecto.Query`, which is planned and rendered through `ecto_ch` — no repo has
   to be running, because a view's SELECT is DDL rather than a query anyone
