@@ -35,7 +35,8 @@ defmodule AshClickhouse.Type.ChFixedString do
   @moduledoc """
   Stores a string in the database.
 
-  A built-in type that can be referenced via `:ch_fixed_string`.
+  Registered as `:ch_fixed_string` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   By default, values are trimmed and empty values are set to `nil`.
   You can use the `allow_empty?` and `trim?` constraints to change these behaviors.

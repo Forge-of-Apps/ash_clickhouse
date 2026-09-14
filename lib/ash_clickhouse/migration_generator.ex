@@ -2,6 +2,10 @@ defmodule AshClickhouse.MigrationGenerator do
   @moduledoc """
   Generates ClickHouse migrations by diffing resources against snapshots.
 
+  Reached through `mix ash.codegen`, or
+  `mix ash_clickhouse.generate_migrations` on its own, which documents the
+  flags. This module is the diffing itself, and the changes it refuses.
+
   Column types come from each attribute's ClickHouse storage type, so a
   resource is the single source of truth for its table.
 

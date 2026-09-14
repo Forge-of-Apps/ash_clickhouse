@@ -39,7 +39,8 @@ defmodule AshClickhouse.Type.ChDecimal do
   @moduledoc """
   Represents a decimal.
 
-  A builtin type that can be referenced via `:decimal`
+  Registered as `:ch_decimal` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

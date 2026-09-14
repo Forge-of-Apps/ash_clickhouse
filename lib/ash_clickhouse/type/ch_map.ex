@@ -28,7 +28,8 @@ defmodule AshClickhouse.Type.ChMap do
 
   In postgres, for example, this represents binary encoded json
 
-  A builtin type that can be referenced via `:map`
+  Registered as `:ch_map` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

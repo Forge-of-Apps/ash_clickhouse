@@ -1,4 +1,5 @@
 defmodule AshClickhouse.SqlImplementation do
+  @moduledoc false
   use AshSql.Implementation
 
   alias AshClickhouse.DataLayer.Info

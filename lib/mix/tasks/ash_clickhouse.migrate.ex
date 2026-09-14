@@ -68,9 +68,6 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
 
     * `--domains` - the domains who's repos should be migrated
 
-
-
-
     * `--all` - run all pending migrations
 
     * `--repo`, `-r` - the repo to migrate

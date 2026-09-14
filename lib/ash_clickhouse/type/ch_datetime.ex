@@ -23,7 +23,8 @@ defmodule AshClickhouse.Type.ChDateTime do
   @moduledoc """
   Represents a datetime, with configurable timezone.
 
-  A builtin type that can be referenced via `:ch_datetime`
+  Registered as `:ch_datetime` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

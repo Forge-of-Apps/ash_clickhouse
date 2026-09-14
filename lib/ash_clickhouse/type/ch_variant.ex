@@ -32,7 +32,8 @@ defmodule AshClickhouse.Type.ChVariant do
   @moduledoc """
   Represents a JSON, with configurable nullable.
 
-  A builtin type that can be referenced via `:ch_json`
+  Registered as `:ch_variant` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

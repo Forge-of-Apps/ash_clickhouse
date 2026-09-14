@@ -1,9 +1,17 @@
 defmodule AshClickhouse.DataLayer.Info do
-  @moduledoc "Introspection functions for Clickhouse"
+  @moduledoc """
+  Reads a resource's `clickhouse` block.
+
+  The DSL is small, so this is too: `repo/2`, `table/1`, `engine/1`,
+  `options/1`, `migrate?/1` and `materialized_view/1` cover all of it. The rest
+  of this module reads options inherited from `ash_postgres` that this data
+  layer's DSL does not define, so they answer with their defaults and nothing
+  else; they are hidden from the docs for that reason.
+  """
 
   alias Spark.Dsl.Extension
 
-  @doc "The configured repo for a resource"
+  @doc "The repo the resource reads from or writes to, resolved if it was given as a function."
   def repo(resource, type \\ :mutate) do
     case Extension.get_opt(resource, [:clickhouse], :repo, nil, true) do
       fun when is_function(fun, 2) ->
@@ -76,188 +84,180 @@ defmodule AshClickhouse.DataLayer.Info do
     end
   end
 
+  @doc "The table engine the resource declares, defaulting to `MergeTree()`."
   def engine(resource) do
     Extension.get_opt(resource, [:clickhouse], :engine, nil, true)
   end
 
+  @doc """
+  Everything following the engine in the resource's `CREATE TABLE`, as raw SQL.
+
+  The sorting key above all. `[]` when the resource declares none.
+  """
   def options(resource) do
     Extension.get_opt(resource, [:clickhouse], :options, [], true)
   end
 
-  @doc "A keyword list of calculations to their sql representation"
+  @doc false
   def calculations_to_sql(resource) do
     Extension.get_opt(resource, [:clickhouse], :calculations_to_sql, [])
   end
 
+  @doc false
   def calculation_to_sql(resource, calc) do
     calculations_to_sql(resource)[calc]
   end
 
-  @doc """
-  A keyword list of identity names to the literal SQL string representation of
-  the `where` clause portion of identity's partial unique index.
-
-  For example, given the following identity for a resource:
-
-      identities do
-        identity :active, [:status] do
-          where expr(status == "active")
-        end
-      end
-  """
   @spec identity_wheres_to_sql(Ash.Resource.t()) :: keyword(String.t())
+  @doc false
   def identity_wheres_to_sql(resource) do
     Extension.get_opt(resource, [:clickhouse], :identity_wheres_to_sql, [])
   end
 
-  @doc """
-  Returns the literal SQL for the `where` clause given a resource and an
-  identity name.
-
-  See `identity_wheres_to_sql/1` for more details.
-  """
   @spec identity_where_to_sql(Ash.Resource.t(), atom()) :: String.t() | nil
+  @doc false
   def identity_where_to_sql(resource, identity) do
     identity_wheres_to_sql(resource)[identity]
   end
 
-  @doc "The configured table for a resource"
+  @doc "The table the resource is stored in, or the name of the view for a materialized view."
   def table(resource) do
     Extension.get_opt(resource, [:clickhouse], :table, nil, true)
   end
 
+  @doc false
   def simple_join_first_aggregates(resource) do
     Extension.get_opt(resource, [:clickhouse], :simple_join_first_aggregates, [])
   end
 
-  @doc "The configured schema for a resource"
+  @doc false
   def schema(resource) do
     Extension.get_opt(resource, [:clickhouse], :schema, nil, true)
   end
 
-  @doc "The configured references for a resource"
+  @doc false
   def references(resource) do
     Extension.get_entities(resource, [:clickhouse, :references])
   end
 
-  @doc "The configured reference for a given relationship of a  resource"
+  @doc false
   def reference(resource, relationship) do
     resource
     |> Extension.get_entities([:clickhouse, :references])
     |> Enum.find(&(&1.relationship == relationship))
   end
 
-  @doc "A keyword list of customized migration types"
+  @doc false
   def migration_types(resource) do
     Extension.get_opt(resource, [:clickhouse], :migration_types, [])
   end
 
-  @doc "A keyword list of customized storage types"
+  @doc false
   def storage_types(resource) do
     Extension.get_opt(resource, [:clickhouse], :storage_types, [])
   end
 
-  @doc "A keyword list of customized migration defaults"
+  @doc false
   def migration_defaults(resource) do
     Extension.get_opt(resource, [:clickhouse], :migration_defaults, [])
   end
 
-  @doc "A list of attributes to be ignored when generating migrations"
+  @doc false
   def migration_ignore_attributes(resource) do
     Extension.get_opt(resource, [:clickhouse], :migration_ignore_attributes, [])
   end
 
-  @doc "The configured check_constraints for a resource"
+  @doc false
   def check_constraints(resource) do
     Extension.get_entities(resource, [:clickhouse, :check_constraints])
   end
 
-  @doc "The configured custom_indexes for a resource"
+  @doc false
   def custom_indexes(resource) do
     Extension.get_entities(resource, [:clickhouse, :custom_indexes])
   end
 
-  @doc "The configured custom_statements for a resource"
+  @doc false
   def custom_statements(resource) do
     Extension.get_entities(resource, [:clickhouse, :custom_statements])
   end
 
-  @doc "The configured polymorphic_reference_on_delete for a resource"
+  @doc false
   def polymorphic_on_delete(resource) do
     Extension.get_opt(resource, [:clickhouse, :references], :polymorphic_on_delete, nil, true)
   end
 
-  @doc "The configured polymorphic_reference_on_update for a resource"
+  @doc false
   def polymorphic_on_update(resource) do
     Extension.get_opt(resource, [:clickhouse, :references], :polymorphic_on_update, nil, true)
   end
 
-  @doc "The configured polymorphic_reference_name for a resource"
+  @doc false
   def polymorphic_name(resource) do
     Extension.get_opt(resource, [:clickhouse, :references], :polymorphic_name, nil, true)
   end
 
-  @doc "The configured polymorphic? for a resource"
+  @doc false
   def polymorphic?(resource) do
     Extension.get_opt(resource, [:clickhouse], :polymorphic?, nil, true)
   end
 
-  @doc "The configured unique_index_names"
+  @doc false
   def unique_index_names(resource) do
     Extension.get_opt(resource, [:clickhouse], :unique_index_names, [], true)
   end
 
-  @doc "The configured exclusion_constraint_names"
+  @doc false
   def exclusion_constraint_names(resource) do
     Extension.get_opt(resource, [:clickhouse], :exclusion_constraint_names, [], true)
   end
 
-  @doc "The configured identity_index_names"
+  @doc false
   def identity_index_names(resource) do
     Extension.get_opt(resource, [:clickhouse], :identity_index_names, [], true)
   end
 
-  @doc "Identities not to include in the migrations"
+  @doc false
   def skip_identities(resource) do
     Extension.get_opt(resource, [:clickhouse], :skip_identities, [], true)
   end
 
-  @doc "The configured foreign_key_names"
+  @doc false
   def foreign_key_names(resource) do
     Extension.get_opt(resource, [:clickhouse], :foreign_key_names, [], true)
   end
 
-  @doc "Whether or not the resource should be included when generating migrations"
+  @doc "Whether `mix ash.codegen` generates DDL for this resource."
   def migrate?(resource) do
     Extension.get_opt(resource, [:clickhouse], :migrate?, nil, true)
   end
 
-  @doc "A list of keys to always include in upserts."
+  @doc false
   def global_upsert_keys(resource) do
     Extension.get_opt(resource, [:clickhouse], :global_upsert_keys, [])
   end
 
-  @doc "A stringified version of the base_filter, to be used in a where clause when generating unique indexes"
+  @doc false
   def base_filter_sql(resource) do
     Extension.get_opt(resource, [:clickhouse], :base_filter_sql, nil)
   end
 
-  @doc "Skip generating unique indexes when generating migrations"
+  @doc false
   def skip_unique_indexes(resource) do
     Extension.get_opt(resource, [:clickhouse], :skip_unique_indexes, [])
   end
 
-  @doc "The template for a managed tenant"
+  @doc false
   def manage_tenant_template(resource) do
     Extension.get_opt(resource, [:clickhouse, :manage_tenant], :template, nil)
   end
 
-  @doc "Whether or not to create a tenant for a given resource"
+  @doc false
   def manage_tenant_create?(resource) do
     Extension.get_opt(resource, [:clickhouse, :manage_tenant], :create?, false)
   end
 
-  @doc "Whether or not to update a tenant for a given resource"
+  @doc false
   def manage_tenant_update?(resource) do
     Extension.get_opt(resource, [:clickhouse, :manage_tenant], :update?, false)
   end

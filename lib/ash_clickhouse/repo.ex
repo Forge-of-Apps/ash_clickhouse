@@ -1,28 +1,46 @@
 defmodule AshClickhouse.Repo do
   @moduledoc """
-  Resources that use `AshClickhouse.DataLayer` use a `Repo` to access the database.
+  The repo a resource using `AshClickhouse.DataLayer` reads and writes through.
 
-  This repo is a thin wrapper around an `Ecto.Repo`.
+  A thin wrapper over an `Ecto.Repo` on the `Ecto.Adapters.ClickHouse` adapter:
 
-  You can use `Ecto.Repo`'s `init/2` to configure your repo like normal, but
-  instead of returning `{:ok, config}`, use `super(config)` to pass the
-  configuration to the `AshClickhouse.Repo` implementation.
+      defmodule MyApp.ClickhouseRepo do
+        use AshClickhouse.Repo, otp_app: :my_app
+      end
 
-  Starting a repo also settles `:ecto_ch`'s `default_table_engine` on
-  `MergeTree`, unless the application has already chosen one. `ecto_ch` would
-  otherwise default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator`
-  runs a migration's `down` and then cannot remove its version row from
+  Configure it as any Ecto repo, and add it to `:ecto_repos` so
+  `mix ash.setup` and `mix ash.migrate` find it:
+
+      config :my_app, ecto_repos: [MyApp.Repo, MyApp.ClickhouseRepo]
+      config :my_app, MyApp.ClickhouseRepo, url: System.get_env("CLICKHOUSE_URL")
+
+  `Ecto.Repo`'s `init/2` can be overridden as usual; return `super(config)`
+  rather than `{:ok, config}`, so this module's own configuration is applied
+  too.
+
+  ## `schema_migrations`
+
+  Starting a repo settles `:ecto_ch`'s `default_table_engine` on `MergeTree`,
+  unless the application has already chosen one. `ecto_ch` would otherwise
+  default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator` runs a
+  migration's `down` and then cannot remove its version row from
   `schema_migrations`, leaving the schema changed but still recorded as
   applied. Every table the migration generator writes names its own engine, so
   the default only ever reaches `schema_migrations` itself.
   """
 
-  @doc "Use this to inform the data layer about what extensions are installed"
+  @doc """
+  Where this repo's migrations live, overriding the derived
+  `priv/<repo>/migrations`.
+
+  `nil`, the default, keeps the derived path.
+  """
+  @callback migrations_path() :: String.t() | nil
+
+  @doc false
   @callback installed_extensions() :: [String.t()]
 
-  @doc "The path where your migrations are stored"
-  @callback migrations_path() :: String.t() | nil
-  @doc "Allows overriding a given migration type for *all* fields, for example if you wanted to always use :timestamptz for :utc_datetime fields"
+  @doc false
   @callback override_migration_type(atom) :: atom
 
   defmacro __using__(opts) do
