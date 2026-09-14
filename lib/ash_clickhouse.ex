@@ -49,17 +49,4 @@ defmodule AshClickhouse do
   that `:uuid` resolves to `Ash.Type.UUID`, not `AshClickhouse.Type.ChUUID`,
   which has no ClickHouse storage type and so cannot be stored or migrated.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> AshClickhouse.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end

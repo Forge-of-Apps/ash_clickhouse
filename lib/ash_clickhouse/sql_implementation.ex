@@ -3,33 +3,6 @@ defmodule AshClickhouse.SqlImplementation do
   use AshSql.Implementation
 
   alias AshClickhouse.DataLayer.Info
-  alias AshClickhouse
-
-  # @callback expr(Ecto.Query.t(), Ash.Expr.t(), map, boolean, AshSql.Expr.ExprInfo.t(), term) ::
-  #             {:ok, term, AshSql.Expr.ExprInfo.t()} | {:error, term} | :error
-
-  # @callback parameterized_type(
-  #             Ash.Type.t() | Ecto.Type.t(),
-  #             constraints :: Keyword.t()
-  #           ) ::
-  #             term
-
-  # @callback storage_type(resource :: Ash.Resource.t(), field :: atom()) :: nil | term
-
-  # @callback determine_types(module, list(term)) :: {list(term), term} | list(term)
-  # @callback determine_types(module, list(term), returns :: term) ::
-  #             {list(term), term} | list(term)
-
-  # @callback list_aggregate(Ash.Resource.t()) :: String.t() | nil
-
-  # @callback multicolumn_distinct?() :: boolean
-
-  # @callback manual_relationship_function() :: atom
-  # @callback manual_relationship_subquery_function() :: atom
-
-  # @callback require_ash_functions_for_or_and_and?() :: boolean
-  # @callback require_extension_for_citext() :: {true, String.t()} | false
-  # @callback strpos_function() :: String.t()
 
   @impl true
   def table(resource), do: Info.table(resource)
