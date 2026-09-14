@@ -11,5 +11,9 @@ defmodule AshClickhouse.Test.Migration.Domain do
   resources do
     resource(AshClickhouse.Test.Migration.Event)
     resource(AshClickhouse.Test.Migration.Ignored)
+    resource(AshClickhouse.Test.Migration.EventsByDay)
+    resource(AshClickhouse.Test.Migration.EventsByDayMv)
+    resource(AshClickhouse.Test.Migration.EventCount)
+    resource(AshClickhouse.Test.Migration.RawSelect)
   end
 end

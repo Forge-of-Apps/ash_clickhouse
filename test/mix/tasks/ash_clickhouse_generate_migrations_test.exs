@@ -145,7 +145,7 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
       assert [migration] = migrations(ctx)
       assert migration =~ ~r/^\d{14}_migrate_resources1_dev\.exs$/
 
-      assert ["events"] = snapshot_tables(ctx)
+      assert "events" in snapshot_tables(ctx)
       assert [snapshot] = snapshots(ctx, "events")
       assert snapshot =~ ~r/^\d{14}_dev\.json$/
     end
@@ -210,7 +210,14 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
     test "a named run writes one migration and a snapshot per migrated table", ctx do
       run(["initial"], ctx)
 
-      assert ["events"] = snapshot_tables(ctx)
+      assert [
+               "event_count_mv",
+               "events",
+               "events_by_day",
+               "events_by_day_mv",
+               "raw_select_mv"
+             ] = snapshot_tables(ctx)
+
       assert [_snapshot] = snapshots(ctx, "events")
 
       sql = generated_sql(ctx)
@@ -291,6 +298,39 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
                |> Enum.max()
                |> File.read!()
                |> Jason.decode!()
+    end
+  end
+
+  describe "materialized views" do
+    test "reach the migration as view DDL", ctx do
+      run(["initial"], ctx)
+
+      sql = generated_sql(ctx)
+
+      assert sql =~ "CREATE MATERIALIZED VIEW events_by_day_mv TO events_by_day AS SELECT"
+      assert sql =~ "CREATE MATERIALIZED VIEW event_count_mv ENGINE = SummingMergeTree()"
+      assert sql =~ "DROP VIEW events_by_day_mv"
+    end
+
+    test "carry the SQL their Ecto.Query rendered, aliases and all", ctx do
+      run(["initial"], ctx)
+
+      sql = generated_sql(ctx)
+
+      assert sql =~ ~S|SELECT toDate(e0.\"at\") AS \"day\"|
+      assert sql =~ ~S|FROM \"events\" AS e0 GROUP BY \"day\"|
+    end
+
+    test "are created after every table and dropped before every one", ctx do
+      run(["initial"], ctx)
+
+      [up, down] = String.split(generated_sql(ctx), "def down do", parts: 2)
+
+      assert :binary.match(up, "CREATE TABLE") |> elem(0) <
+               :binary.match(up, "CREATE MATERIALIZED VIEW") |> elem(0)
+
+      assert :binary.match(down, "DROP VIEW") |> elem(0) <
+               :binary.match(down, "DROP TABLE") |> elem(0)
     end
   end
 
