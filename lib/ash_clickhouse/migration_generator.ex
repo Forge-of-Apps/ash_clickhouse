@@ -5,7 +5,8 @@ defmodule AshClickhouse.MigrationGenerator do
   Reached through `mix ash.codegen`, or
   `mix ash_clickhouse.generate_migrations` on its own, which documents the
   flags. Modelled on `AshPostgres.MigrationGenerator`, so a migration is named,
-  numbered and developed against in the same way.
+  numbered and developed against in the same way; this module is the diffing
+  itself, and the changes it refuses.
 
   Column types come from each attribute's ClickHouse storage type, so a
   resource is the single source of truth for its table.

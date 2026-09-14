@@ -15,7 +15,8 @@ defmodule AshClickhouse.Type.ChUUID do
   @moduledoc """
   Represents a UUID.
 
-  A builtin type that can be referenced via `:uuid`
+  Registered as `:ch_uuid` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

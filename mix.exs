@@ -10,6 +10,8 @@ defmodule AshClickhouse.MixProject do
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
+      name: "AshClickhouse",
+      docs: docs(),
       test_coverage: [tool: ExCoveralls]
     ]
   end
@@ -20,6 +22,16 @@ defmodule AshClickhouse.MixProject do
         mod: {AshClickhouse.TestApp, []}
       ]
     end
+  end
+
+  defp docs do
+    [
+      main: "AshClickhouse",
+      extras: ["README.md"],
+      groups_for_modules: [
+        Types: ~r/^AshClickhouse\.Type\./
+      ]
+    ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -36,9 +48,9 @@ defmodule AshClickhouse.MixProject do
       {:ash_sql, ash_sql_version("~> 0.2")},
       {:excoveralls, "~> 0.18", only: :test},
       {:machete, "~> 0.3.11", only: :test},
-      {:sourceror, "~> 1.8", only: [:dev, :test]}
+      {:sourceror, "~> 1.8", only: [:dev, :test]},
+      {:ex_doc, "~> 0.38", only: [:dev], runtime: false}
       # {:git_ops, "~> 2.5", only: [:dev, :test]},
-      # {:ex_doc, "~> 0.37-rc", only: [:dev, :test], runtime: false},
       # {:ex_check, "~> 0.14", only: [:dev, :test]},
       # {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       # {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},

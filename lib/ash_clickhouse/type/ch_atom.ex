@@ -14,7 +14,8 @@ defmodule AshClickhouse.Type.ChAtom do
   @moduledoc """
   Stores an atom as a string in the database
 
-  A builtin type that can be referenced via `:atom`
+  Registered as `:ch_atom` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

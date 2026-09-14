@@ -38,7 +38,8 @@ for {precision, max_scale} <- [{32, 9}, {64, 18}, {128, 38}, {256, 76}] do
     @moduledoc """
     Represents a decimal.
 
-    A builtin type that can be referenced via `:ch_decimal#{precision}`
+    Registered as `:ch_decimal#{precision}` where short type names are configured (see
+    `AshClickhouse`); an attribute can always name this module instead.
 
     ### Constraints
 

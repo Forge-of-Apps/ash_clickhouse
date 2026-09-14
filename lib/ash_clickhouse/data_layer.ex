@@ -62,7 +62,12 @@ defmodule AshClickhouse.DataLayer do
   @clickhouse %Spark.Dsl.Section{
     name: :clickhouse,
     describe: """
-    Clickhouse data layer configuration
+    Where and how a resource is stored in ClickHouse.
+
+    Every resource using this data layer needs a `repo`; a resource that is
+    migrated also needs a `table` and, for the `MergeTree` family, an `options`
+    naming its sorting key. Add a `materialized_view` block instead of storing
+    rows directly, and the resource becomes a view over another table.
     """,
     sections: [@materialized_view],
     modules: [
@@ -71,8 +76,10 @@ defmodule AshClickhouse.DataLayer do
     examples: [
       """
       clickhouse do
-        repo AshClickhouse
-        table "organizations"
+        repo MyApp.ClickhouseRepo
+        table "events"
+        engine "MergeTree()"
+        options "order by (at, id)"
       end
       """
     ],
@@ -81,29 +88,32 @@ defmodule AshClickhouse.DataLayer do
         type: {:or, [{:behaviour, Ecto.Repo}, {:fun, 2}]},
         required: true,
         doc:
-          "The repo that will be used to fetch your data. See the `AshClickhouse.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo"
+          "The `AshClickhouse.Repo` reads and writes go through, or a function of the resource and `:read | :mutate` returning one."
       ],
       migrate?: [
         type: :boolean,
         default: true,
         doc:
-          "Whether or not to include this resource in the generated migrations with `mix ash.generate_migrations`"
+          "Whether `mix ash.codegen` generates DDL for this resource. A resource with `false` is still read and written normally; its table is simply not the generator's to manage, and the generator will not drop it either."
       ],
       table: [
         type: :string,
         doc: """
-        The table to store and read the resource from. If this is changed, the migration generator will not remove the old table.
+        The table the resource is stored in and read from. Renaming it reads as
+        a table dropped and another created, so the rename itself is a data
+        migration to write by hand.
         """
       ],
       engine: [
         type: :string,
         default: "MergeTree()",
         doc:
-          "The ClickHouse table engine to use. Defaults to `MergeTree()` if not specified. See ClickHouse documentation for more details."
+          "The table engine, written into `CREATE TABLE ... ENGINE = `. Cannot be changed by a generated migration: ClickHouse has no `ALTER` for it."
       ],
       options: [
         type: :string,
-        doc: "Options to be passed to the ClickHouse table, e.g. `order_by`"
+        doc:
+          "Everything that follows the engine in `CREATE TABLE`, given as raw SQL — the sorting key above all, as in `\"order by (at, id)\"`, and `PARTITION BY` or `TTL` alongside it. `MergeTree` engines require a sorting key. Like the engine, it cannot be changed by a generated migration, and a column it names can be neither dropped nor retyped."
       ],
       base_filter_sql: [
         type: :string,
@@ -120,6 +130,81 @@ defmodule AshClickhouse.DataLayer do
   }
 
   @sections [@clickhouse]
+
+  @moduledoc """
+  An Ash data layer storing resources in ClickHouse, through `ecto_ch`.
+
+  Add it to a resource and describe the table in a `clickhouse` block:
+
+      defmodule MyApp.Event do
+        use Ash.Resource, domain: MyApp.Analytics, data_layer: AshClickhouse.DataLayer
+
+        clickhouse do
+          repo MyApp.ClickhouseRepo
+          table "events"
+          options "order by (at, id)"
+        end
+
+        attributes do
+          attribute :id, AshClickhouse.Type.ChUUID,
+            primary_key?: true, allow_nil?: false, default: &Ash.UUIDv7.generate/0
+
+          attribute :name, AshClickhouse.Type.ChString
+          attribute :amount, AshClickhouse.Type.ChUint32
+          attribute :at, AshClickhouse.Type.ChDateTime64, constraints: [precision: 6]
+        end
+      end
+
+  The repo is an `AshClickhouse.Repo`. `mix ash.codegen` writes the migrations
+  and `mix ash.migrate` applies them, alongside every other data layer's — see
+  `AshClickhouse.MigrationGenerator` for what the generator will and will not
+  do for you.
+
+  ## Attribute types
+
+  Column types come from the `AshClickhouse.Type.Ch*` modules, and their
+  constraints choose the ClickHouse type rather than merely validating: a
+  `ChString` with `nullable?: true, low_cardinality?: true` is stored as
+  `LowCardinality(Nullable(String))`. Each type module documents its own
+  constraints.
+
+  An attribute whose type has no ClickHouse storage type cannot be stored or
+  migrated. `Ash.Type.UUID` is the one that catches people out, because
+  `uuid_primary_key` and `uuid_v7_primary_key` produce it; write the primary
+  key out instead, as above.
+
+  ## What ClickHouse does not do
+
+  ClickHouse is an append-only column store, and the differences are not
+  hidden from you:
+
+  * **There are no transactions.** Nothing rolls back — not a failed multi-row
+    insert, and not a migration that fails halfway.
+  * **Model resources append-only: do not declare `:update` actions.** An
+    update is issued as a re-insert, so on a `MergeTree` table both the old and
+    the new row remain and a read returns both. `ReplacingMergeTree` collapses
+    them by sorting key, but only once a background merge runs or a query says
+    `FINAL`, and a read has no way to ask for that. Express a change as a new
+    row and read the latest.
+  * `:destroy` does work. It issues a lightweight `DELETE`, which removes every
+    row sharing the key, duplicates included.
+  * There are no foreign keys and no unique constraints, so `identities` are
+    not enforced by the database and relationships are joins alone.
+  * A table's engine and sorting key are fixed at creation, and a column named
+    in the sorting key can be neither dropped nor retyped.
+  * Multitenancy is not supported. There is no `manage_tenant` block and the
+    generator writes no per-tenant migrations.
+
+  ## Materialized views
+
+  A resource whose `clickhouse` block holds a `materialized_view` section is a
+  view rather than a table: an insert trigger on another table, whose SELECT is
+  written as an `Ecto.Query`. See `AshClickhouse.MaterializedView`.
+
+  ## DSL
+
+  #{Spark.CheatSheet.doc(@sections, 3)}
+  """
 
   use Spark.Dsl.Extension,
     sections: @sections,

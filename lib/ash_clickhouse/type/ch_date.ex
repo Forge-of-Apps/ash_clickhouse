@@ -13,7 +13,8 @@ defmodule AshClickhouse.Type.ChDate do
   @moduledoc """
   Represents a Date, with configurable nullable.
 
-  A builtin type that can be referenced via `:ch_date`
+  Registered as `:ch_date` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 
