@@ -28,7 +28,8 @@ defmodule AshClickhouse.Type.ChDateTime64 do
   @moduledoc """
   Represents a DateTime64, with configurable precision and timezone.
 
-  A builtin type that can be referenced via `:ch_datetime64`
+  Registered as `:ch_datetime64` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

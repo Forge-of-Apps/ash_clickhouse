@@ -23,7 +23,8 @@ defmodule AshClickhouse.Type.ChSimpleAggregateFunction do
   @moduledoc """
   Represents a simple aggregate function.
 
-  A builtin type that can be referenced via `:ch_simple_aggregate_function`.
+  Registered as `:ch_simple_aggregate_function` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

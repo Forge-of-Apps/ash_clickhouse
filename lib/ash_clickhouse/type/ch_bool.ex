@@ -14,7 +14,8 @@ defmodule AshClickhouse.Type.ChBool do
   @moduledoc """
   Represents a boolean.
 
-  A builtin type that can be referenced via `:ch_bool`
+  Registered as `:ch_bool` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 

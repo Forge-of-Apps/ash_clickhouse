@@ -1,4 +1,6 @@
 defmodule AshClickhouse.Type.Helper do
+  @moduledoc false
+
   def find_type(graphql_types, module, short_name, default) do
     Enum.find_value(graphql_types, default, fn
       {^module, type} -> type

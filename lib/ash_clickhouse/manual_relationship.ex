@@ -1,5 +1,12 @@
 defmodule AshClickhouse.ManualRelationship do
-  @moduledoc "A behavior for clickhouse-specific manual relationship functionality"
+  @moduledoc """
+  Implemented by a manual relationship that can be joined in ClickHouse.
+
+  Ash cannot join a manual relationship on its own — the module decides what
+  the join is. Implement this alongside `Ash.Resource.ManualRelationship` and
+  the data layer will fold `ash_clickhouse_join/5` into the query rather than
+  loading the relationship separately.
+  """
 
   @callback ash_clickhouse_join(
               source_query :: Ecto.Query.t(),

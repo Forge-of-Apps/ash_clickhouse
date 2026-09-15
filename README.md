@@ -1,8 +1,12 @@
 # AshClickhouse
 
-A ClickHouse data layer for [Ash](https://ash-hq.org), forked from
+A ClickHouse data layer for [Ash](https://hexdocs.pm/ash), built on
+[ecto_ch](https://hexdocs.pm/ecto_ch). Forked from
 [monoflow-ayvu/ash_clickhouse](https://github.com/monoflow-ayvu/ash_clickhouse)
-and extended with a migration generator.
+and extended with a migration generator and materialized views.
+
+The reference documentation lives in the modules themselves — `h AshClickhouse`
+in IEx, or `mix docs`. This is the tour.
 
 ## Installation
 
@@ -16,77 +20,83 @@ def deps do
 end
 ```
 
-## Declaring a table
+## A resource
 
 ```elixir
+defmodule MyApp.ClickhouseRepo do
+  use AshClickhouse.Repo, otp_app: :my_app
+end
+
 defmodule MyApp.Event do
   use Ash.Resource, domain: MyApp.Analytics, data_layer: AshClickhouse.DataLayer
 
   clickhouse do
     repo MyApp.ClickhouseRepo
     table "events"
-    engine "MergeTree()"
-    options "order by id"
+    options "order by (at, id)"
   end
 
   attributes do
-    attribute :id, AshClickhouse.Type.ChUUID, primary_key?: true, allow_nil?: false
-    attribute :name, AshClickhouse.Type.ChString, allow_nil?: false
+    attribute :id, AshClickhouse.Type.ChUUID,
+      primary_key?: true, allow_nil?: false, default: &Ash.UUIDv7.generate/0
+
+    attribute :name, AshClickhouse.Type.ChString
     attribute :amount, AshClickhouse.Type.ChUint32
+    attribute :at, AshClickhouse.Type.ChDateTime64, constraints: [precision: 6]
   end
 end
 ```
 
-Column types come from the `AshClickhouse.Type.Ch*` modules, whose constraints
-choose the ClickHouse type: `nullable?`, `low_cardinality?`, `precision` and so
-on. An attribute whose type has no ClickHouse storage type — `Ash.Type.UUID`,
-say, which `uuid_primary_key` gives you — cannot be migrated; use `ChUUID`.
+Add the repo to `:ecto_repos` and configure it as any Ecto repo, and
+`mix ash.setup`, `mix ash.codegen` and `mix ash.migrate` cover it alongside
+every other data layer.
+
+`AshClickhouse.DataLayer` documents the whole `clickhouse` DSL and what
+ClickHouse will not do for you — no transactions, no foreign keys, and no
+updates worth declaring. Column types are the `AshClickhouse.Type.Ch*` modules,
+whose constraints choose the ClickHouse type rather than only validating the
+value; each documents its own.
+
+## A materialized view
+
+A view is a resource whose `clickhouse` block holds a `materialized_view`
+section. Its SELECT is written as an `Ecto.Query` and rendered to SQL at
+codegen time:
+
+```elixir
+materialized_view do
+  source MyApp.Event
+  to MyApp.EventsByDay
+
+  query fn events ->
+    from e in events,
+      group_by: selected_as(:day),
+      select: %{
+        day: selected_as(fragment("toDate(?)", e.at), :day),
+        events: selected_as(count(), :events)
+      }
+  end
+end
+```
+
+See `AshClickhouse.MaterializedView` for why every column needs
+`selected_as/2`, why the query can carry no bound parameters, and when to reach
+for raw SQL instead.
 
 ## Migrations
 
-`mix ash.codegen add_events` generates ClickHouse migrations alongside every
-other extension's, by diffing the resources against the snapshots under
-`priv/resource_snapshots/<repo>/<table>/`.
-`mix ash_clickhouse.generate_migrations` runs the same thing on its own, and
-`mix ash.migrate` applies the result.
+`mix ash.codegen` diffs the resources against snapshots under
+`priv/resource_snapshots/<repo>/` and writes a migration; `mix ash.migrate`
+applies it.
+`mix ash_clickhouse.generate_migrations` and `mix ash_clickhouse.migrate` do
+the same for this data layer alone.
 
-The first argument names the migration, as it does in
-`mix ash_postgres.generate_migrations`, and a name is required unless
-`--dry-run`, `--check`, `--dev` or `--auto-name` excuses it.
-
-`--dev` is for a change you are still working on. It writes
-`<timestamp>_<name>_dev.exs` and a matching `_dev` snapshot; the next named run
-rolls those migrations back, deletes them and their snapshots, and writes one
-migration in their place, so iterating leaves no trail of half-steps behind.
-`--check` fails while any are still there.
-
-Migrations are otherwise never rewritten or deleted: one that exists may
-already have been applied, and ClickHouse has no transactional rollback to undo
-it with.
-
-A snapshot no resource claims any more is reported but not dropped. Renaming a
-resource's `table` looks exactly like deleting it, so `DROP TABLE` is opt-in
-through `--drop-tables`; run codegen with it once the data really is
-disposable, and hand-write the rename otherwise.
-
-These changes raise rather than emitting DDL that ClickHouse would reject or
-that would silently destroy data:
-
-- changing a table's engine or sorting key
-- dropping or retyping a column the sorting key names
-
-Each is a data migration. Write it by hand.
-
-`mix ash_clickhouse.generate_migrations` documents the rest of the flags.
-
-## schema_migrations
-
-Starting an `AshClickhouse.Repo` settles `ecto_ch`'s `default_table_engine` on
-`MergeTree` unless the application has already chosen one. `ecto_ch` would
-otherwise default to `TinyLog`, which supports no `DELETE`: `Ecto.Migrator`
-runs a migration's `down` and then cannot remove its version row, leaving the
-schema changed but still recorded as applied. Every generated table names its
-own engine, so the default only ever reaches `schema_migrations`.
+ClickHouse has no transactional rollback, so the generator refuses to emit
+anything that would fail halfway or destroy data — a changed engine or sorting
+key, a dropped or retyped sorting-key column, a redefined view that owns its
+storage. `AshClickhouse.MigrationGenerator` documents each refusal;
+`mix ash_clickhouse.generate_migrations` documents naming, the `--dev`
+workflow and the rest of the flags.
 
 ## Running the tests
 

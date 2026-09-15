@@ -18,7 +18,8 @@ defmodule AshClickhouse.Type.ChIPv6 do
   @moduledoc """
   Represents an IPv6 address.
 
-  A builtin type that can be referenced via `:ipv6`
+  Registered as `:ch_ipv6` where short type names are configured (see
+  `AshClickhouse`); an attribute can always name this module instead.
 
   ### Constraints
 
