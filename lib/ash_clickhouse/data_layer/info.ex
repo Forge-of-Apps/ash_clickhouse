@@ -14,6 +14,68 @@ defmodule AshClickhouse.DataLayer.Info do
     end
   end
 
+  @doc """
+  The materialized view a resource declares, or `nil` when it is a plain table.
+
+  Shaped for the migration generator and its snapshots: `%{"source" => ...,
+  "to" => ... | nil, "select" => ...}`, with the SELECT already rendered, so a
+  snapshot records the SQL that reached ClickHouse rather than the query that
+  produced it.
+  """
+  def materialized_view(resource) do
+    case Extension.get_opt(resource, [:clickhouse, :materialized_view], :source, nil, true) do
+      nil ->
+        nil
+
+      source ->
+        source = table_name(source)
+        to = resource |> view_opt(:to) |> table_name()
+
+        {select, aliases} =
+          AshClickhouse.MaterializedView.select_sql(
+            source,
+            view_opt(resource, :query),
+            view_opt(resource, :select)
+          )
+
+        if to do
+          AshClickhouse.MaterializedView.validate_aliases!(
+            table(resource),
+            aliases,
+            destination_columns(resource, to)
+          )
+        end
+
+        %{"source" => source, "to" => to, "select" => select}
+    end
+  end
+
+  defp view_opt(resource, key) do
+    Extension.get_opt(resource, [:clickhouse, :materialized_view], key, nil, true)
+  end
+
+  defp table_name(nil), do: nil
+  defp table_name(table) when is_binary(table), do: table
+  defp table_name(resource) when is_atom(resource), do: table(resource)
+
+  defp destination_columns(resource, to) do
+    resource
+    |> Ash.Resource.Info.domain()
+    |> Ash.Domain.Info.resources()
+    |> Enum.find(&(Ash.DataLayer.data_layer(&1) == AshClickhouse.DataLayer and table(&1) == to))
+    |> case do
+      nil ->
+        raise """
+        #{table(resource)} writes into #{to}, which no resource in         #{inspect(Ash.Resource.Info.domain(resource))} declares.
+
+        Give the destination table a resource in the same domain, so the view's         columns can be checked against it and the table itself gets migrated.
+        """
+
+      destination ->
+        destination |> Ash.Resource.Info.attributes() |> Enum.map(&to_string(&1.name))
+    end
+  end
+
   def engine(resource) do
     Extension.get_opt(resource, [:clickhouse], :engine, nil, true)
   end
