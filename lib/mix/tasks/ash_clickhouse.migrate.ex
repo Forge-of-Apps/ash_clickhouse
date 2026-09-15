@@ -7,7 +7,7 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
   use Mix.Task
 
   import AshClickhouse.Mix.Helpers,
-    only: [migrations_path: 2, tenant_migrations_path: 2, tenants: 2]
+    only: [migrations_path: 2]
 
   @shortdoc "Runs the repository migrations for all repositories in the provided (or configured) domains"
 
@@ -18,7 +18,6 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
 
   @switches [
     all: :boolean,
-    tenants: :boolean,
     step: :integer,
     to: :integer,
     quiet: :boolean,
@@ -31,8 +30,6 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
     no_compile: :boolean,
     no_deps_check: :boolean,
     migrations_path: :keep,
-    only_tenants: :string,
-    except_tenants: :string,
     repo: :string
   ]
 
@@ -40,7 +37,7 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
   Runs the pending migrations for the given repository.
 
   Migrations are expected at "priv/YOUR_REPO/migrations" directory
-  of the current application (or `tenant_migrations` for multitenancy),
+  of the current application,
   where "YOUR_REPO" is the last segment
   in your repository name. For example, the repository `MyApp.Repo`
   will use "priv/repo/migrations". The repository `Whatever.MyRepo`
@@ -71,12 +68,6 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
 
     * `--domains` - the domains who's repos should be migrated
 
-    * `--tenants` - Run the tenant migrations
-
-    * `--only-tenants` - in combo with `--tenants`, only runs migrations for the provided tenants, e.g `tenant1,tenant2,tenant3`
-
-    * `--except-tenants` - in combo with `--tenants`, does not run migrations for the provided tenants, e.g `tenant1,tenant2,tenant3`
-
     * `--all` - run all pending migrations
 
     * `--repo`, `-r` - the repo to migrate
@@ -87,7 +78,7 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
 
     * `--quiet` - do not log migration commands
 
-    * `--prefix` - the prefix to run migrations on. This is ignored if `--tenants` is provided.
+    * `--prefix` - the prefix to run migrations on
 
     * `--pool-size` - the pool size if the repository is started only for the task (defaults to 2)
 
@@ -121,42 +112,20 @@ defmodule Mix.Tasks.AshClickhouse.Migrate do
       args
       |> AshClickhouse.Mix.Helpers.delete_arg("--domains")
       |> AshClickhouse.Mix.Helpers.delete_arg("--migrations-path")
-      |> AshClickhouse.Mix.Helpers.delete_flag("--tenants")
-      |> AshClickhouse.Mix.Helpers.delete_arg("--only-tenants")
-      |> AshClickhouse.Mix.Helpers.delete_arg("--except-tenants")
       |> AshClickhouse.Mix.Helpers.delete_arg("--repo")
       |> AshClickhouse.Mix.Helpers.delete_arg("-r")
 
     Mix.Task.reenable("ecto.migrate")
 
-    if opts[:tenants] do
-      for repo <- repos do
-        Ecto.Migrator.with_repo(repo, fn repo ->
-          for tenant <- tenants(repo, opts) do
-            rest_opts = AshClickhouse.Mix.Helpers.delete_arg(rest_opts, "--prefix")
+    for repo <- repos do
+      Mix.Task.run(
+        "ecto.migrate",
+        ["-r", to_string(repo)] ++
+          rest_opts ++
+          ["--migrations-path", migrations_path(opts, repo)]
+      )
 
-            Mix.Task.run(
-              "ecto.migrate",
-              ["-r", to_string(repo)] ++
-                rest_opts ++
-                ["--prefix", tenant, "--migrations-path", tenant_migrations_path(opts, repo)]
-            )
-
-            Mix.Task.reenable("ecto.migrate")
-          end
-        end)
-      end
-    else
-      for repo <- repos do
-        Mix.Task.run(
-          "ecto.migrate",
-          ["-r", to_string(repo)] ++
-            rest_opts ++
-            ["--migrations-path", migrations_path(opts, repo)]
-        )
-
-        Mix.Task.reenable("ecto.migrate")
-      end
+      Mix.Task.reenable("ecto.migrate")
     end
   end
 end

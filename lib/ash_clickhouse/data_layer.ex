@@ -114,17 +114,6 @@ defmodule AshClickhouse.DataLayer do
         type: :string,
         doc:
           "Everything that follows the engine in `CREATE TABLE`, given as raw SQL — the sorting key above all, as in `\"order by (at, id)\"`, and `PARTITION BY` or `TTL` alongside it. `MergeTree` engines require a sorting key. Like the engine, it cannot be changed by a generated migration, and a column it names can be neither dropped nor retyped."
-      ],
-      base_filter_sql: [
-        type: :string,
-        doc:
-          "A raw sql version of the base_filter, e.g `representative = true`. Required if trying to create a unique constraint on a resource with a base_filter"
-      ],
-      migration_defaults: [
-        type: :keyword_list,
-        default: [],
-        doc:
-          "A keyword list of attribute names to the literal SQL of the column's `DEFAULT` expression, e.g `[id: \"generateUUIDv4()\"]`."
       ]
     ]
   }
@@ -192,8 +181,9 @@ defmodule AshClickhouse.DataLayer do
     not enforced by the database and relationships are joins alone.
   * A table's engine and sorting key are fixed at creation, and a column named
     in the sorting key can be neither dropped nor retyped.
-  * Multitenancy is not supported. There is no `manage_tenant` block and the
-    generator writes no per-tenant migrations.
+  * Multitenancy is not supported. There is no `manage_tenant` block, the
+    generator writes no per-tenant migrations, and the mix tasks take no
+    tenant flags.
 
   ## Materialized views
 
@@ -247,7 +237,6 @@ defmodule AshClickhouse.DataLayer do
             end
 
           migrations_path = AshClickhouse.Mix.Helpers.migrations_path([], repo)
-          tenant_migrations_path = AshClickhouse.Mix.Helpers.tenant_migrations_path([], repo)
 
           current_migrations =
             Ecto.Query.from(row in "schema_migrations",
@@ -316,92 +305,6 @@ defmodule AshClickhouse.DataLayer do
 
             Mix.Task.reenable("ash_clickhouse.rollback")
           end
-
-          tenant_files =
-            tenant_migrations_path
-            |> Path.join("**/*.exs")
-            |> Path.wildcard()
-            |> Enum.sort()
-            |> Enum.reverse()
-
-          if !Enum.empty?(tenant_files) do
-            first_tenant = repo.all_tenants() |> Enum.at(0)
-
-            if first_tenant do
-              current_tenant_migrations =
-                Ecto.Query.from(row in "schema_migrations",
-                  select: row.version
-                )
-                |> repo.all(prefix: first_tenant)
-                |> Enum.map(&to_string/1)
-
-              tenant_files =
-                tenant_files
-                |> Enum.filter(fn file ->
-                  Enum.any?(
-                    current_tenant_migrations,
-                    &String.starts_with?(Path.basename(file), &1)
-                  )
-                end)
-                |> Enum.take(20)
-                |> Enum.map(&String.trim_leading(&1, tenant_migrations_path))
-                |> Enum.map(&String.trim_leading(&1, "/"))
-
-              indexed =
-                tenant_files
-                |> Enum.with_index()
-                |> Enum.map(fn {file, index} -> "#{index + 1}: #{file}" end)
-
-              to =
-                Mix.shell().prompt(
-                  """
-
-                  How many _tenant_ migrations should be rolled back#{for_repo}? (default: 0)
-
-                  IMPORTANT: we are assuming that all of your tenants have all had the same migrations run.
-                  If each tenant may be in a different state: *abort this command and roll them back individually*.
-                  To do so, use the `--only-tenants` option to `mix ash_clickhouse.rollback`.
-
-                  Last 20 migration names, with the input you must provide to
-                  rollback up to *and including* that migration:
-
-                  #{Enum.join(indexed, "\n")}
-
-                  Rollback to:
-                  """
-                  |> String.trim_trailing()
-                )
-                |> String.trim()
-                |> case do
-                  "" ->
-                    nil
-
-                  "0" ->
-                    nil
-
-                  n ->
-                    try do
-                      tenant_files
-                      |> Enum.at(String.to_integer(n) - 1)
-                    rescue
-                      _ ->
-                        reraise "Required an integer value, got: #{n}", __STACKTRACE__
-                    end
-                    |> String.split("_", parts: 2)
-                    |> Enum.at(0)
-                    |> String.to_integer()
-                end
-
-              if to do
-                Mix.Task.run(
-                  "ash_clickhouse.rollback",
-                  args ++ ["--tenants", "-r", inspect(repo), "--to", to]
-                )
-
-                Mix.Task.reenable("ash_clickhouse.rollback")
-              end
-            end
-          end
         end)
     end
   end
@@ -415,30 +318,11 @@ defmodule AshClickhouse.DataLayer do
     # TODO: take args that we care about
     Mix.Task.run("ash_clickhouse.create", args)
     Mix.Task.run("ash_clickhouse.migrate", args)
-
-    []
-    |> AshClickhouse.Mix.Helpers.repos!(args)
-    |> Enum.all?(&(not has_tenant_migrations?(&1)))
-    |> case do
-      true ->
-        :ok
-
-      _ ->
-        Mix.Task.run("ash_clickhouse.migrate", ["--tenant" | args])
-    end
   end
 
   def tear_down(args) do
     # TODO: take args that we care about
     Mix.Task.run("ash_clickhouse.drop", args)
-  end
-
-  defp has_tenant_migrations?(repo) do
-    []
-    |> AshClickhouse.Mix.Helpers.tenant_migrations_path(repo)
-    |> Path.join("**/*.exs")
-    |> Path.wildcard()
-    |> Enum.empty?()
   end
 
   @impl true
