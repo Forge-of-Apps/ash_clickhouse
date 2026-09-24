@@ -47,6 +47,8 @@ for {precision, max_scale} <- [{32, 9}, {64, 18}, {128, 38}, {256, 76}] do
     """
     use Ash.Type
     require Decimal
+
+    @max_digits max_scale
     require AshClickhouse.Type.Helper
 
     AshClickhouse.Type.Helper.graphql_type(
@@ -265,7 +267,7 @@ for {precision, max_scale} <- [{32, 9}, {64, 18}, {128, 38}, {256, 76}] do
     def cast_input(nil, _constraints), do: {:ok, nil}
 
     def cast_input(value, _constraints) when is_binary(value) do
-      case Decimal.parse(value) do
+      case Decimal.parse(value, max_digits: @max_digits) do
         {decimal, ""} ->
           {:ok, decimal}
 
@@ -288,7 +290,7 @@ for {precision, max_scale} <- [{32, 9}, {64, 18}, {128, 38}, {256, 76}] do
     @impl true
 
     def cast_stored(value, _) when is_binary(value) do
-      case Decimal.parse(value) do
+      case Decimal.parse(value, max_digits: @max_digits) do
         {decimal, ""} ->
           {:ok, decimal}
 
@@ -314,7 +316,7 @@ for {precision, max_scale} <- [{32, 9}, {64, 18}, {128, 38}, {256, 76}] do
 
     @doc false
     def new(%Decimal{} = v), do: v
-    def new(v), do: Decimal.new(v)
+    def new(v), do: Decimal.new(v, max_digits: @max_digits)
 
     @impl true
     def equal?(nil, nil), do: true

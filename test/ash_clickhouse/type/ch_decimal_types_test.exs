@@ -130,7 +130,7 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
 
       assert Ash.Type.matches_type?(
                ChDecimal256,
-               Decimal.new("123456789012345678901234567890.12345678"),
+               Decimal.new("123456789012345678901234567890.12345678", max_digits: 76),
                []
              )
     end
@@ -167,8 +167,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       assert Ash.Type.matches_type?(
                {:array, ChDecimal256},
                [
-                 Decimal.new("123456789012345678901234567890.12345678"),
-                 Decimal.new("987654321098765432109876543210.87654321")
+                 Decimal.new("123456789012345678901234567890.12345678", max_digits: 76),
+                 Decimal.new("987654321098765432109876543210.87654321", max_digits: 76)
                ],
                []
              )
@@ -190,8 +190,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
         Enum.take(Ash.Type.generator(ChDecimal32, constraints), 100) |> Enum.uniq()
 
       assert Enum.all?(generated_decimals, fn decimal ->
-               Decimal.cmp(decimal, constraints[:min]) != :lt and
-                 Decimal.cmp(decimal, constraints[:max]) != :gt
+               Decimal.compare(decimal, constraints[:min]) != :lt and
+                 Decimal.compare(decimal, constraints[:max]) != :gt
              end)
     end
 
@@ -202,8 +202,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
         Enum.take(Ash.Type.generator(ChDecimal64, constraints), 100) |> Enum.uniq()
 
       assert Enum.all?(generated_decimals, fn decimal ->
-               Decimal.cmp(decimal, constraints[:min]) != :lt and
-                 Decimal.cmp(decimal, constraints[:max]) != :gt
+               Decimal.compare(decimal, constraints[:min]) != :lt and
+                 Decimal.compare(decimal, constraints[:max]) != :gt
              end)
     end
 
@@ -214,8 +214,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
         Enum.take(Ash.Type.generator(ChDecimal128, constraints), 100) |> Enum.uniq()
 
       assert Enum.all?(generated_decimals, fn decimal ->
-               Decimal.cmp(decimal, constraints[:min]) != :lt and
-                 Decimal.cmp(decimal, constraints[:max]) != :gt
+               Decimal.compare(decimal, constraints[:min]) != :lt and
+                 Decimal.compare(decimal, constraints[:max]) != :gt
              end)
     end
 
@@ -226,8 +226,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
         Enum.take(Ash.Type.generator(ChDecimal256, constraints), 100) |> Enum.uniq()
 
       assert Enum.all?(generated_decimals, fn decimal ->
-               Decimal.cmp(decimal, constraints[:min]) != :lt and
-                 Decimal.cmp(decimal, constraints[:max]) != :gt
+               Decimal.compare(decimal, constraints[:min]) != :lt and
+                 Decimal.compare(decimal, constraints[:max]) != :gt
              end)
     end
 
@@ -240,8 +240,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       assert Enum.all?(generated_arrays, fn arr ->
                is_list(arr) and
                  Enum.all?(arr, fn decimal ->
-                   Decimal.cmp(decimal, constraints[:min]) != :lt and
-                     Decimal.cmp(decimal, constraints[:max]) != :gt
+                   Decimal.compare(decimal, constraints[:min]) != :lt and
+                     Decimal.compare(decimal, constraints[:max]) != :gt
                  end)
              end)
     end
@@ -255,8 +255,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       assert Enum.all?(generated_arrays, fn arr ->
                is_list(arr) and
                  Enum.all?(arr, fn decimal ->
-                   Decimal.cmp(decimal, constraints[:min]) != :lt and
-                     Decimal.cmp(decimal, constraints[:max]) != :gt
+                   Decimal.compare(decimal, constraints[:min]) != :lt and
+                     Decimal.compare(decimal, constraints[:max]) != :gt
                  end)
              end)
     end
@@ -270,8 +270,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       assert Enum.all?(generated_arrays, fn arr ->
                is_list(arr) and
                  Enum.all?(arr, fn decimal ->
-                   Decimal.cmp(decimal, constraints[:min]) != :lt and
-                     Decimal.cmp(decimal, constraints[:max]) != :gt
+                   Decimal.compare(decimal, constraints[:min]) != :lt and
+                     Decimal.compare(decimal, constraints[:max]) != :gt
                  end)
              end)
     end
@@ -285,8 +285,8 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       assert Enum.all?(generated_arrays, fn arr ->
                is_list(arr) and
                  Enum.all?(arr, fn decimal ->
-                   Decimal.cmp(decimal, constraints[:min]) != :lt and
-                     Decimal.cmp(decimal, constraints[:max]) != :gt
+                   Decimal.compare(decimal, constraints[:min]) != :lt and
+                     Decimal.compare(decimal, constraints[:max]) != :gt
                  end)
              end)
     end
@@ -474,6 +474,24 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
     end
   end
 
+  describe "string casts beyond decimal128 precision" do
+    test "each type parses as many digits as its column holds" do
+      digits38 = String.duplicate("9", 36) <> ".99"
+      digits76 = String.duplicate("9", 74) <> ".99"
+
+      assert {:ok, %Decimal{}} = Ash.Type.cast_input(ChDecimal128, digits38, scale: 2)
+      assert {:ok, %Decimal{}} = Ash.Type.cast_stored(ChDecimal128, digits38, scale: 2)
+      assert {:ok, %Decimal{}} = Ash.Type.cast_input(ChDecimal256, digits76, scale: 2)
+      assert {:ok, %Decimal{}} = Ash.Type.cast_stored(ChDecimal256, digits76, scale: 2)
+      assert %Decimal{} = ChDecimal256.new(digits76)
+    end
+
+    test "digits beyond the column's range are rejected" do
+      assert {:error, _} = Ash.Type.cast_input(ChDecimal32, String.duplicate("9", 10), scale: 0)
+      assert :error = Ash.Type.cast_stored(ChDecimal128, String.duplicate("9", 39), scale: 0)
+    end
+  end
+
   describe "cast_input/2" do
     test "casts valid Decimal correctly" do
       assert Ash.Type.cast_input(ChDecimal32, Decimal.new("123.45"), precision: 9, scale: 2) ==
@@ -608,7 +626,7 @@ defmodule AshClickhouse.Type.ChDecimalTypesTest do
       decimal32 = Decimal.new("123.456")
       decimal64 = Decimal.new("1234567890.12")
       decimal128 = Decimal.new("12345678901234567890.12345")
-      decimal256 = Decimal.new("123456789012345678901234567890.12345678")
+      decimal256 = Decimal.new("123456789012345678901234567890.12345678", max_digits: 76)
 
       assert Ash.Type.equal?(ChDecimal32, decimal32, decimal32)
       assert Ash.Type.equal?(ChDecimal64, decimal64, decimal64)

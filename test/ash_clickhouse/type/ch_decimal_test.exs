@@ -76,8 +76,8 @@ defmodule AshClickhouse.Type.ChDecimalTest do
       generated_decimals = Enum.take(ChDecimal.generator(constraints), 100) |> Enum.uniq()
 
       assert Enum.all?(generated_decimals, fn decimal ->
-               Decimal.cmp(decimal, constraints[:min]) != :lt and
-                 Decimal.cmp(decimal, constraints[:max]) != :gt
+               Decimal.compare(decimal, constraints[:min]) != :lt and
+                 Decimal.compare(decimal, constraints[:max]) != :gt
              end)
     end
 
@@ -95,8 +95,8 @@ defmodule AshClickhouse.Type.ChDecimalTest do
       assert Enum.all?(generated_arrays, fn arr ->
                is_list(arr) and
                  Enum.all?(arr, fn decimal ->
-                   Decimal.cmp(decimal, constraints[:min]) != :lt and
-                     Decimal.cmp(decimal, constraints[:max]) != :gt
+                   Decimal.compare(decimal, constraints[:min]) != :lt and
+                     Decimal.compare(decimal, constraints[:max]) != :gt
                  end)
              end)
     end
@@ -167,6 +167,20 @@ defmodule AshClickhouse.Type.ChDecimalTest do
       assert length(errors) == 1
       [error] = errors
       assert error[:message] =~ "must be less than or equal to %{max}"
+    end
+  end
+
+  describe "string casts beyond decimal128 precision" do
+    test "parses up to ClickHouse's 76 digits" do
+      digits76 = String.duplicate("9", 74) <> ".99"
+
+      assert {:ok, %Decimal{}} =
+               Ash.Type.cast_input(ChDecimal, digits76, precision: 76, scale: 2)
+
+      assert {:ok, %Decimal{}} =
+               Ash.Type.cast_stored(ChDecimal, digits76, precision: 76, scale: 2)
+
+      assert %Decimal{} = ChDecimal.new(digits76)
     end
   end
 

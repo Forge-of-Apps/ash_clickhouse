@@ -40,12 +40,13 @@ defmodule AshClickhouse.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto_sql, "~> 3.13"},
-      {:ecto_ch, "~> 0.8"},
-      {:ecto, "~> 3.13"},
+      {:ecto_sql, "~> 3.14"},
+      {:ecto_ch, "~> 0.11"},
+      {:ecto, "~> 3.14"},
+      {:decimal, "~> 3.1"},
       {:jason, "~> 1.0"},
-      {:ash, ash_version("~> 3.5")},
-      {:ash_sql, ash_sql_version("~> 0.2")},
+      {:ash, ash_version("~> 3.33")},
+      {:ash_sql, ash_sql_version("~> 0.7 and >= 0.7.1")},
       {:excoveralls, "~> 0.18", only: :test},
       {:machete, "~> 0.3.11", only: :test},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
@@ -70,11 +71,8 @@ defmodule AshClickhouse.MixProject do
       "main" ->
         [git: "https://github.com/ash-project/ash.git", override: true]
 
-      version when is_binary(version) ->
-        "~> #{version}"
-
       version ->
-        version
+        "~> #{version}"
     end
   end
 
@@ -89,11 +87,8 @@ defmodule AshClickhouse.MixProject do
       "main" ->
         [git: "https://github.com/ash-project/ash_sql.git"]
 
-      version when is_binary(version) ->
-        "~> #{version}"
-
       version ->
-        version
+        "~> #{version}"
     end
   end
 

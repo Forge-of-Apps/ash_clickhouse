@@ -50,6 +50,8 @@ defmodule AshClickhouse.Type.ChDecimal do
   require Decimal
   require AshClickhouse.Type.Helper
 
+  @max_digits 76
+
   AshClickhouse.Type.Helper.graphql_type(__MODULE__, :ch_decimal, :decimal)
 
   @impl true
@@ -278,7 +280,7 @@ defmodule AshClickhouse.Type.ChDecimal do
 
   @impl true
   def cast_input(value, _constraints) when is_binary(value) do
-    case Decimal.parse(value) do
+    case Decimal.parse(value, max_digits: @max_digits) do
       {decimal, ""} ->
         {:ok, decimal}
 
@@ -301,7 +303,7 @@ defmodule AshClickhouse.Type.ChDecimal do
   @impl true
 
   def cast_stored(value, _) when is_binary(value) do
-    case Decimal.parse(value) do
+    case Decimal.parse(value, max_digits: @max_digits) do
       {decimal, ""} ->
         {:ok, decimal}
 
@@ -327,7 +329,7 @@ defmodule AshClickhouse.Type.ChDecimal do
 
   @doc false
   def new(%Decimal{} = v), do: v
-  def new(v), do: Decimal.new(v)
+  def new(v), do: Decimal.new(v, max_digits: @max_digits)
 
   @impl true
   def equal?(nil, nil), do: true

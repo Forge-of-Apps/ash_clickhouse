@@ -361,11 +361,12 @@ defmodule AshClickhouse.CreateTest do
         nullable_decimal32_attr: nil,
         decimal64_attr: Decimal.new("0.123456789123456789"),
         nullable_decimal64_attr: nil,
-        decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912"),
+        decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
         nullable_decimal128_attr: nil,
         decimal256_attr:
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           ),
         nullable_decimal256_attr: nil,
         json_attr: %{"foo" => "bar"},
@@ -471,13 +472,13 @@ defmodule AshClickhouse.CreateTest do
           Decimal.new("0.123456789123456789")
         ],
         array_of_decimal128_attr: [
-          Decimal.new("0.12345678912345678912345678912345678912"),
-          Decimal.new("0.12345678912345678912345678912345678912"),
-          Decimal.new("0.12345678912345678912345678912345678912")
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76)
         ],
         array_of_nullable_decimal128_attr: [
-          Decimal.new("0.12345678912345678912345678912345678912"),
-          Decimal.new("0.12345678912345678912345678912345678912"),
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
           nil
         ],
         array_of_json_attr: [%{"foo" => "bar"}, %{"baz" => "qux"}],
@@ -510,16 +511,19 @@ defmodule AshClickhouse.CreateTest do
         ],
         array_of_decimal256_attr: [
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           ),
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           )
         ],
         array_of_nullable_decimal256_attr: [
           nil,
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           )
         ],
         array_of_variant_attr: ["foo", 42],
@@ -1218,15 +1222,18 @@ defmodule AshClickhouse.CreateTest do
         nullable_decimal32_attr: Decimal.new("2.0"),
         decimal64_attr: Decimal.new("1.0"),
         nullable_decimal64_attr: Decimal.new("3.0"),
-        decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912"),
-        nullable_decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912"),
+        decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
+        nullable_decimal128_attr:
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
         decimal256_attr:
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           ),
         nullable_decimal256_attr:
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           ),
         json_attr: %{"key" => "value"},
         nullable_json_attr: %{"nested" => %{"a" => 1}},
@@ -1273,11 +1280,14 @@ defmodule AshClickhouse.CreateTest do
         array_of_nullable_decimal32_attr: [nil],
         array_of_decimal64_attr: [Decimal.new("1.0")],
         array_of_nullable_decimal64_attr: [nil],
-        array_of_decimal128_attr: [Decimal.new("0.12345678912345678912345678912345678912")],
+        array_of_decimal128_attr: [
+          Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76)
+        ],
         array_of_nullable_decimal128_attr: [nil],
         array_of_decimal256_attr: [
           Decimal.new(
-            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+            "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+            max_digits: 76
           )
         ],
         array_of_nullable_decimal256_attr: [nil],
@@ -1357,10 +1367,12 @@ defmodule AshClickhouse.CreateTest do
           decimal_attr: Decimal.new("0.01"),
           decimal32_attr: Decimal.new("0.1"),
           decimal64_attr: Decimal.new("0.1"),
-          decimal128_attr: Decimal.new("0.12345678912345678912345678912345678912"),
+          decimal128_attr:
+            Decimal.new("0.12345678912345678912345678912345678912", max_digits: 76),
           decimal256_attr:
             Decimal.new(
-              "0.1234567891234567891234567891234567891234567891234567891234567891234567891234"
+              "0.1234567891234567891234567891234567891234567891234567891234567891234567891234",
+              max_digits: 76
             ),
           json_attr: %{},
           map_attr: %{"foo" => "a", "bar" => "b", "baz" => "c"},

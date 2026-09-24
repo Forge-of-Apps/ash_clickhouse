@@ -88,6 +88,8 @@ ch_custom_types =
 
 config :ash, :custom_types, ch_custom_types
 
+config :ash, default_string_length_count: :codepoints
+
 config :ash, :compatible_foreign_key_types, [
   {Ash.Type.UUID, AshClickhouse.Type.ChUUID}
 ]
