@@ -1131,6 +1131,6 @@ defmodule AshClickhouse.DataLayer do
   end
 
   defp handle_raised_error(error, stacktrace, _ecto_changeset, _resource) do
-    {:error, Ash.Error.to_ash_error(error, Exception.format_stacktrace(stacktrace))}
+    {:error, Ash.Error.to_ash_error(error, stacktrace)}
   end
 end
