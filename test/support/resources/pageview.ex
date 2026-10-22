@@ -27,17 +27,10 @@ defmodule AshClickhouse.Test.Resource.Pageview do
 
     attribute(:site, AshClickhouse.Type.ChString, public?: true, allow_nil?: false)
 
-    attribute :visitor, AshClickhouse.Type.ChJSON do
-      public?(true)
-      allow_nil?(false)
-
-      constraints(
-        paths: %{
-          "user.id" => AshClickhouse.Type.ChString,
-          "user.visits" => AshClickhouse.Type.ChUint32
-        }
-      )
-    end
+    attribute(:visitor, AshClickhouse.Test.Resource.Types.Visitor,
+      public?: true,
+      allow_nil?: false
+    )
 
     attribute(:at, AshClickhouse.Type.ChDateTime64, public?: true, constraints: [precision: 6])
   end

@@ -3,6 +3,8 @@ defmodule AshClickhouse.TypedJsonTest do
 
   alias AshClickhouse.MigrationGenerator
   alias AshClickhouse.Test.Resource.Pageview
+  alias AshClickhouse.Test.Resource.Types.Visitor
+  alias AshClickhouse.Test.Resource.Types.Visitor.User
 
   setup do
     TestRepo.query!("TRUNCATE TABLE pageviews")
@@ -31,29 +33,36 @@ defmodule AshClickhouse.TypedJsonTest do
              )
   end
 
-  test "a typed JSON column is written and read back as plain JSON" do
+  test "a typed struct is written and read back whole, nils and untyped fields included" do
     create!("example.com", %{user: %{id: "u1", visits: 1}})
-
-    create!("example.com", %{
-      "user" => %{"id" => "u2", "visits" => 3},
-      "referrer" => "search"
-    })
+    create!("example.com", %{user: %{id: "u2", visits: 3, plan: "pro"}, referrer: "search"})
 
     assert [
-             %Pageview{visitor: %{"user" => %{"id" => "u1", "visits" => 1}}},
              %Pageview{
-               visitor: %{"user" => %{"id" => "u2", "visits" => 3}, "referrer" => "search"}
+               visitor: %Visitor{user: %User{id: "u1", visits: 1, plan: nil}, referrer: nil}
+             },
+             %Pageview{
+               visitor: %Visitor{
+                 user: %User{id: "u2", visits: 3, plan: "pro"},
+                 referrer: "search"
+               }
              }
            ] = Pageview |> Ash.Query.sort(:at) |> Ash.read!()
   end
 
   test "typed paths are stored with their types, and the rows sorted by them" do
-    create!("example.com", %{"user" => %{"id" => "u2", "visits" => 3}})
-    create!("example.com", %{"user" => %{"id" => "u1", "visits" => 1}})
+    create!("example.com", %{user: %{id: "u2", visits: 3}})
+    create!("example.com", %{user: %{id: "u1", visits: 1}})
 
-    assert %{rows: [["u1", "String", "UInt32"], ["u2", "String", "UInt32"]]} =
+    assert %{
+             rows: [
+               ["u1", "String", "UInt32", "Nullable(String)"],
+               ["u2", "String", "UInt32", "Nullable(String)"]
+             ]
+           } =
              TestRepo.query!("""
-             SELECT visitor.user.id, toTypeName(visitor.user.id), toTypeName(visitor.user.visits)
+             SELECT visitor.user.id, toTypeName(visitor.user.id), toTypeName(visitor.user.visits),
+               toTypeName(visitor.user.plan)
              FROM pageviews
              ORDER BY site, visitor.user.id, at
              """)

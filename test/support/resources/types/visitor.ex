@@ -1,7 +1,13 @@
 defmodule AshClickhouse.Test.Resource.Types.Visitor do
-  @moduledoc "A JSON column with typed paths, declared once as a type of its own."
+  @moduledoc "A typed struct stored as JSON, its fields of ClickHouse types as typed paths."
 
-  use Ash.Type.NewType,
-    subtype_of: AshClickhouse.Type.ChJSON,
-    constraints: [paths: %{"user.id" => AshClickhouse.Type.ChString}]
+  use Ash.TypedStruct
+
+  typed_struct do
+    field(:user, AshClickhouse.Test.Resource.Types.Visitor.User, allow_nil?: false)
+    field(:referrer, :string)
+  end
+
+  @impl true
+  def storage_type(_constraints), do: AshClickhouse.Type.ChJSON.storage_type_of(__MODULE__)
 end

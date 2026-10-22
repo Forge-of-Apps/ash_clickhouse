@@ -1,6 +1,9 @@
 defmodule AshClickhouse.Type.ChJsonTest do
   use ExUnit.Case, async: true
 
+  alias AshClickhouse.Test.Resource.Types.Origin
+  alias AshClickhouse.Test.Resource.Types.TestEnum8
+  alias AshClickhouse.Test.Resource.Types.Visitor
   alias AshClickhouse.Type.ChJSON
   alias AshClickhouse.Type.ChString
   alias AshClickhouse.Type.ChUint32
@@ -33,44 +36,110 @@ defmodule AshClickhouse.Type.ChJsonTest do
 
       assert encode_ch_type({:array, subtype}) == "Array(Nullable(JSON))"
     end
-
-    test "spells out typed paths in the ClickHouse type, sorted as ClickHouse sorts them" do
-      assert {:parameterized, {Ch, "JSON(`user.id` String, `user.visits` UInt32)"}} =
-               Ash.Type.storage_type(ChJSON,
-                 paths: %{"user.visits" => ChUint32, "user.id" => ChString}
-               )
-    end
-
-    test "renders a path's type with its constraints, arrays included" do
-      assert {:parameterized, {Ch, "JSON(`tag` LowCardinality(String), `tags` Array(String))"}} =
-               Ash.Type.storage_type(ChJSON,
-                 paths: %{
-                   "tag" => {ChString, low_cardinality?: true},
-                   "tags" => {:array, ChString}
-                 }
-               )
-    end
-
-    test "wraps typed JSON in Nullable" do
-      assert {:parameterized, {Ch, "Nullable(JSON(`user.id` String))"}} =
-               Ash.Type.storage_type(ChJSON, nullable?: true, paths: %{"user.id" => ChString})
-    end
-
-    test "is plain JSON for no paths" do
-      assert {:parameterized, {Ch, :json}} = Ash.Type.storage_type(ChJSON, paths: %{})
-    end
   end
 
-  describe "paths constraint" do
-    test "maps path names to types" do
-      assert {:ok, _constraints} =
-               Ash.Type.validate_constraints(ChJSON,
-                 paths: %{"user.id" => ChString, "user.tag" => {ChString, nullable?: true}}
-               )
+  describe "storage_type_of/1" do
+    defmodule Fields do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [
+          fields: [
+            note: [type: :string],
+            level: [type: TestEnum8],
+            required_level: [type: TestEnum8, allow_nil?: false],
+            tags: [type: {:array, :ch_string}],
+            required_tags: [type: {:array, :ch_string}, allow_nil?: false],
+            owner: [
+              type: :map,
+              constraints: [fields: [id: [type: ChString, allow_nil?: false]]]
+            ]
+          ]
+        ]
     end
 
-    test "refuses paths that are not named by strings" do
-      assert {:error, _error} = Ash.Type.validate_constraints(ChJSON, paths: [user: ChString])
+    defmodule Untyped do
+      use Ash.Type.NewType, subtype_of: :map, constraints: [fields: [note: [type: :string]]]
+    end
+
+    defmodule Tagged do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          storage: :map_with_tag,
+          types: [
+            link: [
+              type: :map,
+              tag: :kind,
+              tag_value: "link",
+              constraints: [
+                fields: [
+                  kind: [type: :string],
+                  url: [type: ChString, allow_nil?: false]
+                ]
+              ]
+            ]
+          ]
+        ]
+    end
+
+    defmodule HalfTyped do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          types: [
+            a: [type: :map, constraints: [fields: [x: [type: ChString, allow_nil?: false]]]],
+            b: [type: :map, constraints: [fields: [x: [type: :string, allow_nil?: false]]]]
+          ]
+        ]
+    end
+
+    defmodule Clashing do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          types: [
+            a: [type: :map, constraints: [fields: [x: [type: ChString, allow_nil?: false]]]],
+            b: [type: :map, constraints: [fields: [x: [type: ChUint32, allow_nil?: false]]]]
+          ]
+        ]
+    end
+
+    test "types a typed struct's fields of ClickHouse types, nested ones included" do
+      assert {:parameterized,
+              {Ch, "JSON(`user.id` String, `user.plan` Nullable(String), `user.visits` UInt32)"}} =
+               ChJSON.storage_type_of(Visitor)
+    end
+
+    test "types a union's map members under value, leaving its other members dynamic" do
+      assert {:parameterized, {Ch, "JSON(`value.url` String)"}} =
+               Ash.Type.storage_type(Origin, [])
+    end
+
+    test "types a :map_with_tag union's members at the top" do
+      assert {:parameterized, {Ch, "JSON(`url` String)"}} = ChJSON.storage_type_of(Tagged)
+    end
+
+    test "leaves dynamic the fields that could not keep a nil, nested maps included" do
+      assert {:parameterized,
+              {Ch,
+               "JSON(`required_level` Enum8('enum8_min' = -128, 'enum8_zero' = 0, 'enum8_max' = 127), `required_tags` Array(String))"}} =
+               ChJSON.storage_type_of(Fields)
+    end
+
+    test "is plain JSON when no field has a ClickHouse type" do
+      assert {:parameterized, {Ch, :json}} = ChJSON.storage_type_of(Untyped)
+    end
+
+    test "refuses members typing one path differently" do
+      assert_raise ArgumentError, ~r/path value.x different types: String, UInt32/, fn ->
+        ChJSON.storage_type_of(Clashing)
+      end
+    end
+
+    test "refuses a path one member types and another leaves dynamic" do
+      assert_raise ArgumentError, ~r/path value.x different types: String, dynamic/, fn ->
+        ChJSON.storage_type_of(HalfTyped)
+      end
     end
   end
 

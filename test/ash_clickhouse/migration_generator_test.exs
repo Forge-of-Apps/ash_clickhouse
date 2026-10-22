@@ -10,8 +10,6 @@ defmodule AshClickhouse.MigrationGeneratorTest do
   alias AshClickhouse.Test.Migration.RawSelect
   alias AshClickhouse.Test.Resource.Pageview
   alias AshClickhouse.Test.Resource.Types.Origin
-  alias AshClickhouse.Test.Resource.Types.Visitor
-  alias AshClickhouse.Type.ChJSON
   alias AshClickhouse.Type.ChString
 
   defp snapshot(columns, overrides \\ %{}) do
@@ -108,8 +106,7 @@ defmodule AshClickhouse.MigrationGeneratorTest do
     end
 
     test "takes a storage type that is already a ClickHouse type as it is" do
-      assert MigrationGenerator.column_type(ChJSON, paths: %{"user.id" => ChString}) ==
-               "JSON(`user.id` String)"
+      assert MigrationGenerator.column_type(Origin, []) == "JSON(`value.url` String)"
     end
 
     test "wraps an array's item type, constraints and all" do
@@ -118,19 +115,9 @@ defmodule AshClickhouse.MigrationGeneratorTest do
     end
 
     test "refuses array items whose storage type ch could not name in an insert" do
-      assert_raise RuntimeError, ~r/cannot store its items as JSON\(`user.id` String\)/, fn ->
-        MigrationGenerator.column_type({:array, ChJSON}, items: [paths: %{"user.id" => ChString}])
+      assert_raise RuntimeError, ~r/cannot store its items as JSON\(`value.url` String\)/, fn ->
+        MigrationGenerator.column_type({:array, Origin}, [])
       end
-    end
-
-    test "reaches a new type's paths through its subtype's storage type" do
-      {:ok, constraints} = Ash.Type.init(Visitor, [])
-
-      assert MigrationGenerator.column_type(Visitor, constraints) == "JSON(`user.id` String)"
-    end
-
-    test "reaches the paths a type stored as JSON declares in its storage type" do
-      assert MigrationGenerator.column_type(Origin, []) == "JSON(`value.url` String)"
     end
 
     test "names typed paths in the snapshot, where the sorting key may name them" do
@@ -139,7 +126,11 @@ defmodule AshClickhouse.MigrationGeneratorTest do
                "columns" => [
                  %{"name" => "id", "type" => "UUID"},
                  %{"name" => "site", "type" => "String"},
-                 %{"name" => "visitor", "type" => "JSON(`user.id` String, `user.visits` UInt32)"},
+                 %{
+                   "name" => "visitor",
+                   "type" =>
+                     "JSON(`user.id` String, `user.plan` Nullable(String), `user.visits` UInt32)"
+                 },
                  %{"name" => "at", "type" => "DateTime64(6)"}
                ]
              } = MigrationGenerator.snapshot(Pageview)

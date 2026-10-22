@@ -564,7 +564,7 @@ defmodule AshClickhouse.MigrationGenerator do
   @doc """
   The ClickHouse type a column of `type` is created with, read off its storage
   type. A storage type may hold the ClickHouse type as a string where `ch` has
-  no term for it, as `AshClickhouse.Type.ChJSON` does for typed paths.
+  no term for it, as `AshClickhouse.Type.ChJSON.storage_type_of/1` does.
   """
   def column_type(type, constraints) do
     case Ash.Type.storage_type(Ash.Type.get_type(type), constraints) do
