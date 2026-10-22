@@ -9,7 +9,7 @@ defmodule AshClickhouse.MigrationGenerator do
   itself, and the changes it refuses.
 
   Column types come from each attribute's ClickHouse storage type, so a
-  resource is the single source of truth for its table.
+  resource is the single source of truth for its table; see `column_type/2`.
 
   A snapshot is the JSON-encodable shape of one table or materialized view,
   written to `priv/resource_snapshots/<repo>/<table>/<timestamp>.json` once a
@@ -559,13 +559,30 @@ defmodule AshClickhouse.MigrationGenerator do
     end
   end
 
-  defp column_type(%{type: type, constraints: constraints}) do
-    storage =
-      case Ash.Type.storage_type(type, constraints) do
-        {:array, {:parameterized, {Ch, ch_type}}} -> {:array, ch_type}
-        {:parameterized, {Ch, ch_type}} -> ch_type
-      end
+  defp column_type(%{type: type, constraints: constraints}), do: column_type(type, constraints)
 
-    IO.iodata_to_binary(Ch.Types.encode(storage))
+  @doc """
+  The ClickHouse type a column of `type` is created with, read off its storage
+  type. A storage type may hold the ClickHouse type as a string where `ch` has
+  no term for it, as `AshClickhouse.Type.ChJSON` does for typed paths.
+  """
+  def column_type(type, constraints) do
+    case Ash.Type.storage_type(Ash.Type.get_type(type), constraints) do
+      {:array, {:parameterized, {Ch, ch_type}}} when is_binary(ch_type) ->
+        raise """
+        #{inspect(type)} cannot store its items as #{ch_type}: ch writes an
+        insert's header from type terms, and has none for that type to put in
+        an Array. Give it a column of its own instead.
+        """
+
+      {:array, {:parameterized, {Ch, ch_type}}} ->
+        "Array(#{encode(ch_type)})"
+
+      {:parameterized, {Ch, ch_type}} ->
+        encode(ch_type)
+    end
   end
+
+  defp encode(type) when is_binary(type), do: type
+  defp encode(type), do: IO.iodata_to_binary(Ch.Types.encode(type))
 end

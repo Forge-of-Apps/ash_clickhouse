@@ -6,5 +6,6 @@ defmodule AshClickhouse.Test.Domain do
     resource(AshClickhouse.Test.Resource.AllTypes)
     resource(AshClickhouse.Test.Resource.Organization)
     resource(AshClickhouse.Test.Resource.OrganizationUser)
+    resource(AshClickhouse.Test.Resource.Pageview)
   end
 end

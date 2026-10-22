@@ -2,6 +2,8 @@ defmodule AshClickhouse.Type.ChJsonTest do
   use ExUnit.Case, async: true
 
   alias AshClickhouse.Type.ChJSON
+  alias AshClickhouse.Type.ChString
+  alias AshClickhouse.Type.ChUint32
 
   import AshClickhouse.Test.Helper, only: [encode_ch_type: 1]
 
@@ -30,6 +32,45 @@ defmodule AshClickhouse.Type.ChJsonTest do
                Ash.Type.storage_type({:array, ChJSON}, items: [nullable?: true])
 
       assert encode_ch_type({:array, subtype}) == "Array(Nullable(JSON))"
+    end
+
+    test "spells out typed paths in the ClickHouse type, sorted as ClickHouse sorts them" do
+      assert {:parameterized, {Ch, "JSON(`user.id` String, `user.visits` UInt32)"}} =
+               Ash.Type.storage_type(ChJSON,
+                 paths: %{"user.visits" => ChUint32, "user.id" => ChString}
+               )
+    end
+
+    test "renders a path's type with its constraints, arrays included" do
+      assert {:parameterized, {Ch, "JSON(`tag` LowCardinality(String), `tags` Array(String))"}} =
+               Ash.Type.storage_type(ChJSON,
+                 paths: %{
+                   "tag" => {ChString, low_cardinality?: true},
+                   "tags" => {:array, ChString}
+                 }
+               )
+    end
+
+    test "wraps typed JSON in Nullable" do
+      assert {:parameterized, {Ch, "Nullable(JSON(`user.id` String))"}} =
+               Ash.Type.storage_type(ChJSON, nullable?: true, paths: %{"user.id" => ChString})
+    end
+
+    test "is plain JSON for no paths" do
+      assert {:parameterized, {Ch, :json}} = Ash.Type.storage_type(ChJSON, paths: %{})
+    end
+  end
+
+  describe "paths constraint" do
+    test "maps path names to types" do
+      assert {:ok, _constraints} =
+               Ash.Type.validate_constraints(ChJSON,
+                 paths: %{"user.id" => ChString, "user.tag" => {ChString, nullable?: true}}
+               )
+    end
+
+    test "refuses paths that are not named by strings" do
+      assert {:error, _error} = Ash.Type.validate_constraints(ChJSON, paths: [user: ChString])
     end
   end
 
