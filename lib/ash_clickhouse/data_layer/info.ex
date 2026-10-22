@@ -37,7 +37,8 @@ defmodule AshClickhouse.DataLayer.Info do
 
       source ->
         source = table_name(source)
-        to = resource |> view_opt(:to) |> table_name()
+        destination = view_opt(resource, :to)
+        to = table_name(destination)
 
         {select, aliases} =
           AshClickhouse.MaterializedView.select_sql(
@@ -50,7 +51,7 @@ defmodule AshClickhouse.DataLayer.Info do
           AshClickhouse.MaterializedView.validate_aliases!(
             table(resource),
             aliases,
-            destination_columns(resource, to)
+            destination_columns(resource, destination)
           )
         end
 
@@ -66,7 +67,7 @@ defmodule AshClickhouse.DataLayer.Info do
   defp table_name(table) when is_binary(table), do: table
   defp table_name(resource) when is_atom(resource), do: table(resource)
 
-  defp destination_columns(resource, to) do
+  defp destination_columns(resource, to) when is_binary(to) do
     resource
     |> Ash.Resource.Info.domain()
     |> Ash.Domain.Info.resources()
@@ -74,15 +75,21 @@ defmodule AshClickhouse.DataLayer.Info do
     |> case do
       nil ->
         raise """
-        #{table(resource)} writes into #{to}, which no resource in         #{inspect(Ash.Resource.Info.domain(resource))} declares.
+        #{table(resource)} writes into #{to}, which no resource in \
+        #{inspect(Ash.Resource.Info.domain(resource))} declares.
 
-        Give the destination table a resource in the same domain, so the view's         columns can be checked against it and the table itself gets migrated.
+        Give the destination table a resource, so the view's columns can be \
+        checked against it and the table itself gets migrated. Name that \
+        resource in `to` when it belongs to another domain.
         """
 
       destination ->
-        destination |> Ash.Resource.Info.attributes() |> Enum.map(&to_string(&1.name))
+        destination_columns(resource, destination)
     end
   end
+
+  defp destination_columns(_resource, destination),
+    do: destination |> Ash.Resource.Info.attributes() |> Enum.map(&to_string(&1.name))
 
   @doc "The table engine the resource declares, defaulting to `MergeTree()`."
   def engine(resource) do

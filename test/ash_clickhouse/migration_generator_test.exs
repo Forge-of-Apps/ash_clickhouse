@@ -2,6 +2,8 @@ defmodule AshClickhouse.MigrationGeneratorTest do
   use ExUnit.Case, async: true
 
   alias AshClickhouse.MigrationGenerator
+  alias AshClickhouse.Test.Elsewhere.EventsByDayMv, as: EventsByDayElsewhere
+  alias AshClickhouse.Test.Elsewhere.TableNamed
   alias AshClickhouse.Test.Migration.Event
   alias AshClickhouse.Test.Migration.EventCount
   alias AshClickhouse.Test.Migration.EventsByDayMv
@@ -66,6 +68,17 @@ defmodule AshClickhouse.MigrationGeneratorTest do
                "options" => "order by name",
                "materialized_view" => %{"to" => nil}
              } = MigrationGenerator.snapshot(EventCount)
+    end
+
+    test "a view may write into another domain's table, named by its resource" do
+      assert %{"materialized_view" => %{"source" => "events", "to" => "events_by_day"}} =
+               MigrationGenerator.snapshot(EventsByDayElsewhere)
+    end
+
+    test "a bare table name is looked up in the view's own domain only" do
+      assert_raise RuntimeError,
+                   ~r/writes into events_by_day, which no resource in AshClickhouse.Test.Elsewhere.Domain declares/,
+                   fn -> MigrationGenerator.snapshot(TableNamed) end
     end
 
     test "a raw select is recorded as written" do
