@@ -44,7 +44,7 @@ defmodule AshClickhouse.DataLayer do
       to: [
         type: {:or, [{:spark, Ash.Resource}, :string]},
         doc:
-          "The resource, or bare table name, the view writes into. Without it the view owns its own storage, built from `engine` and `options`."
+          "The resource, or bare table name, the view writes into, whose attributes the view's aliases are checked against. The resource may belong to any domain; a bare table name has to be declared by a resource in the view's own. Without it the view owns its own storage, built from `engine` and `options`."
       ],
       query: [
         type: {:fun, 1},
