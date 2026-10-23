@@ -4,6 +4,8 @@ defmodule AshClickhouse.Type.ChJSON do
 
   alias AshClickhouse.MigrationGenerator
 
+  @json_types [Ash.Type.Union, Ash.Type.Map, Ash.Type.Struct, Ash.Type.Keyword]
+
   @constraints [
     nullable?: [
       type: :boolean,
@@ -72,7 +74,8 @@ defmodule AshClickhouse.Type.ChJSON do
   keep its nil: one whose type cannot be `Nullable`, and a nested map or union
   that allows nil, whose typed paths would read back as an object of defaults.
   Every row reads back every typed path, so union members must agree on a path
-  they share, or the type raises.
+  they share, or the type raises. A type nested in itself, directly or through
+  others, leaves its inner occurrence dynamic, as does an array of maps.
 
   `ch` has no term for typed JSON, so the storage type is the ClickHouse type as
   a string: ch writes it into an insert's header as it is, which ClickHouse
@@ -85,7 +88,7 @@ defmodule AshClickhouse.Type.ChJSON do
     with nil <- :persistent_term.get(key, nil) do
       storage_type =
         type
-        |> typed_paths([], [], false)
+        |> typed_paths([], [], false, [])
         |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
         |> Enum.flat_map(fn {path, column_types} ->
           case Enum.uniq(column_types) do
@@ -112,10 +115,11 @@ defmodule AshClickhouse.Type.ChJSON do
     end
   end
 
-  defp typed_paths({:array, _item_type}, _constraints, _path, false), do: []
+  defp typed_paths({:array, _item_type}, _constraints, _path, false, _within), do: []
 
-  defp typed_paths({:array, _item_type} = type, constraints, path, true) do
-    case !constraints[:nullable?] && Ash.Type.storage_type(type, constraints) do
+  defp typed_paths({:array, item_type} = type, constraints, path, true, _within) do
+    case !constraints[:nullable?] and Ash.Type.NewType.subtype_of(item_type) not in @json_types and
+           Ash.Type.storage_type(type, constraints) do
       {:array, {:parameterized, {Ch, ch_type}}}
       when not is_binary(ch_type) and ch_type != :json ->
         [{Enum.join(path, "."), MigrationGenerator.column_type(type, constraints)}]
@@ -125,18 +129,21 @@ defmodule AshClickhouse.Type.ChJSON do
     end
   end
 
-  defp typed_paths(type, constraints, path, field?) do
+  defp typed_paths(type, constraints, path, field?, within) do
     cond do
+      type in within ->
+        []
+
       Ash.Type.NewType.new_type?(type) ->
         typed_paths(
           type.subtype_of(),
           Keyword.merge(type.subtype_constraints(), constraints),
           path,
-          field?
+          field?,
+          [type | within]
         )
 
-      type in [Ash.Type.Union, Ash.Type.Map, Ash.Type.Struct, Ash.Type.Keyword] and
-          constraints[:nullable?] ->
+      type in @json_types and constraints[:nullable?] ->
         []
 
       type == Ash.Type.Union ->
@@ -150,11 +157,12 @@ defmodule AshClickhouse.Type.ChJSON do
             Ash.Type.get_type(config[:type]),
             config[:constraints] || [],
             member_path,
-            false
+            false,
+            within
           )
         end)
 
-      type in [Ash.Type.Map, Ash.Type.Struct, Ash.Type.Keyword] ->
+      type in @json_types ->
         Enum.flat_map(constraints[:fields] || [], fn {name, config} ->
           constraints =
             if Keyword.get(config, :allow_nil?, true),
@@ -165,7 +173,8 @@ defmodule AshClickhouse.Type.ChJSON do
             Ash.Type.get_type(config[:type]),
             constraints,
             path ++ [to_string(name)],
-            true
+            true,
+            within
           )
         end)
 

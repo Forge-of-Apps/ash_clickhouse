@@ -93,6 +93,47 @@ defmodule AshClickhouse.Type.ChJsonTest do
         ]
     end
 
+    defmodule Expr do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          types: [
+            literal: [
+              type: :map,
+              constraints: [fields: [n: [type: ChUint32, allow_nil?: false]]]
+            ],
+            binary: [type: AshClickhouse.Type.ChJsonTest.Binary, init?: false]
+          ]
+        ]
+    end
+
+    defmodule Binary do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [
+          fields: [
+            op: [type: ChString, allow_nil?: false],
+            left: [type: Expr, allow_nil?: false, init?: false],
+            right: [type: Expr, allow_nil?: false, init?: false]
+          ]
+        ]
+    end
+
+    defmodule Tree do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [
+          fields: [
+            name: [type: ChString, allow_nil?: false],
+            children: [
+              type: {:array, AshClickhouse.Type.ChJsonTest.Tree},
+              allow_nil?: false,
+              init?: false
+            ]
+          ]
+        ]
+    end
+
     defmodule Clashing do
       use Ash.Type.NewType,
         subtype_of: :union,
@@ -124,6 +165,13 @@ defmodule AshClickhouse.Type.ChJsonTest do
               {Ch,
                "JSON(`required_level` Enum8('enum8_min' = -128, 'enum8_zero' = 0, 'enum8_max' = 127), `required_tags` Array(String))"}} =
                ChJSON.storage_type_of(Fields)
+    end
+
+    test "leaves a type nested in itself dynamic where it recurs" do
+      assert {:parameterized, {Ch, "JSON(`value.n` UInt32, `value.op` String)"}} =
+               ChJSON.storage_type_of(Expr)
+
+      assert {:parameterized, {Ch, "JSON(`name` String)"}} = ChJSON.storage_type_of(Tree)
     end
 
     test "is plain JSON when no field has a ClickHouse type" do
