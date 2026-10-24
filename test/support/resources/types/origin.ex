@@ -1,7 +1,7 @@
 defmodule AshClickhouse.Test.Resource.Types.Origin do
   @moduledoc """
-  A union stored as JSON in its own `{"type": ..., "value": ...}` shape: its map
-  member's fields are typed under `value`, its scalar member stays dynamic.
+  A union stored as JSON in its own `{"type": ..., "value": ...}` shape, its map
+  members' fields typed under `value`.
   """
 
   use Ash.Type.NewType,
@@ -12,7 +12,10 @@ defmodule AshClickhouse.Test.Resource.Types.Origin do
           type: :map,
           constraints: [fields: [url: [type: AshClickhouse.Type.ChString, allow_nil?: false]]]
         ],
-        count: [type: AshClickhouse.Type.ChUint32]
+        campaign: [
+          type: :map,
+          constraints: [fields: [code: [type: AshClickhouse.Type.ChString, allow_nil?: false]]]
+        ]
       ]
     ]
 

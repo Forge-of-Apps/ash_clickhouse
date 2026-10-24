@@ -140,6 +140,17 @@ defmodule AshClickhouse.Type.ChJsonTest do
         ]
     end
 
+    defmodule Mixed do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          types: [
+            link: [type: :map, constraints: [fields: [url: [type: ChString, allow_nil?: false]]]],
+            count: [type: ChUint32]
+          ]
+        ]
+    end
+
     defmodule Clashing do
       use Ash.Type.NewType,
         subtype_of: :union,
@@ -157,9 +168,13 @@ defmodule AshClickhouse.Type.ChJsonTest do
                ChJSON.storage_type_of(Visitor)
     end
 
-    test "types a union's map members under value, leaving its other members dynamic" do
-      assert {:parameterized, {Ch, "JSON(`value.url` String)"}} =
+    test "types a union's map members under value" do
+      assert {:parameterized, {Ch, "JSON(`value.code` String, `value.url` String)"}} =
                Ash.Type.storage_type(Origin, [])
+    end
+
+    test "leaves a union dynamic whole when a member is not a map" do
+      assert {:parameterized, {Ch, :json}} = ChJSON.storage_type_of(Mixed)
     end
 
     test "types a :map_with_tag union's members at the top" do

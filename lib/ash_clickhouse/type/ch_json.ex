@@ -71,9 +71,11 @@ defmodule AshClickhouse.Type.ChJSON do
   Fields are those `type` declares through `Ash.Type.Map`, `Ash.Type.Struct` or
   `Ash.Type.Keyword`, so an `Ash.TypedStruct`'s too, nested or not, and those of
   a union's members, under `value` with `:type_and_value` storage. Other fields
-  stay dynamic, as do a member that is not a map and a field that could not
-  keep its nil: one whose type cannot be `Nullable`, and a nested map or union
-  that allows nil, whose typed paths would read back as an object of defaults.
+  stay dynamic, as does a field that could not keep its nil: one whose type
+  cannot be `Nullable`, and a nested map or union that allows nil, whose typed
+  paths would read back as an object of defaults. A union with a member that is
+  not a map stays dynamic whole, as that member's value would read back beside
+  the typed paths under a duplicate key.
   Every row reads back every typed path, so union members must agree on a path
   they share, or the type raises. A type nested in itself, directly or through
   others, leaves its inner occurrence dynamic, as does an array of maps.
@@ -153,15 +155,24 @@ defmodule AshClickhouse.Type.ChJSON do
             do: path ++ ["value"],
             else: path
 
-        Enum.flat_map(constraints[:types], fn {_name, config} ->
-          typed_paths(
-            Ash.Type.get_type(config[:type]),
-            config[:constraints] || [],
-            member_path,
-            false,
-            within
-          )
-        end)
+        members = Enum.map(constraints[:types], fn {_name, config} -> config end)
+
+        if Enum.all?(
+             members,
+             &(Ash.Type.NewType.subtype_of(Ash.Type.get_type(&1[:type])) in @json_types)
+           ) do
+          Enum.flat_map(members, fn config ->
+            typed_paths(
+              Ash.Type.get_type(config[:type]),
+              config[:constraints] || [],
+              member_path,
+              false,
+              within
+            )
+          end)
+        else
+          []
+        end
 
       type in @json_types ->
         Enum.flat_map(constraints[:fields] || [], fn {name, config} ->
