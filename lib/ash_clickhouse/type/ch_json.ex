@@ -39,8 +39,9 @@ defmodule AshClickhouse.Type.ChJSON do
         def storage_type(_constraints), do: AshClickhouse.Type.ChJSON.storage_type_of(__MODULE__)
       end
 
-  A `MyApp.Visitor` column is then `JSON(id String)`; see
-  `storage_type_of/1`.
+  A `MyApp.Visitor` column is then `JSON(id String)`. A union stored as
+  `{"type": ..., "value": ...}` types its tag too, so a table can be sorted by
+  `(column.type, ...)`; see `storage_type_of/1`.
 
   ### Paths in queries
 
@@ -78,13 +79,15 @@ defmodule AshClickhouse.Type.ChJSON do
 
     * Fields are those of `Ash.Type.Map`, `Ash.Type.Struct` and `Ash.Type.Keyword`,
       an `Ash.TypedStruct`'s among them, nested or not, and of a union's members,
-      under `value` with `:type_and_value` storage.
+      under `value` with `:type_and_value` storage. Such a union's tag, `type`,
+      is a `LowCardinality(String)` path, so a sorting key may name it too.
     * A field allowing nil is `Nullable`, since ClickHouse reads a missing or null
       path as its type's default.
     * A field stays dynamic where ClickHouse could not hold it typed: a type not
       of ClickHouse, JSON itself, a nil its type cannot be `Nullable` for, an
       array of objects, a nested object allowing nil, a type recurring inside
-      itself, and every field of a union with a member that is not an object.
+      itself, and every member field of a union with a member that is not an
+      object.
     * Every row reads back every typed path, so the type raises where union
       members type one path differently, or a path has a value of its own and
       paths inside it. A field named with a dot raises too: ClickHouse reads such
@@ -162,18 +165,21 @@ defmodule AshClickhouse.Type.ChJSON do
             {member, Ash.Type.NewType.subtype_of(member), config[:constraints] || []}
           end
 
-        value_path =
+        {tag_paths, value_path} =
           if Keyword.get(constraints, :storage, :type_and_value) == :type_and_value,
-            do: path ++ ["value"],
-            else: path
+            do: {[{path ++ ["type"], "LowCardinality(String)"}], path ++ ["value"]},
+            else: {[], path}
 
-        if Enum.all?(members, fn {_member, base, _constraints} -> base in @json_types end) do
-          Enum.flat_map(members, fn {member, _base, constraints} ->
-            object_paths(member, constraints, value_path, within)
-          end)
-        else
-          [{path, :dynamic}]
-        end
+        member_paths =
+          if Enum.all?(members, fn {_member, base, _constraints} -> base in @json_types end) do
+            Enum.flat_map(members, fn {member, _base, constraints} ->
+              object_paths(member, constraints, value_path, within)
+            end)
+          else
+            [{value_path, :dynamic}]
+          end
+
+        tag_paths ++ member_paths
 
       true ->
         Enum.flat_map(constraints[:fields] || [], &field_paths(&1, path, within))

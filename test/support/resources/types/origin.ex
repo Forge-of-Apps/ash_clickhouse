@@ -1,7 +1,7 @@
 defmodule AshClickhouse.Test.Resource.Types.Origin do
   @moduledoc """
-  A union stored as JSON in its own `{"type": ..., "value": ...}` shape, its map
-  members' fields typed under `value`.
+  A union stored as JSON in its own `{"type": ..., "value": ...}` shape, its tag
+  typed and its map members' fields typed under `value`.
   """
 
   use Ash.Type.NewType,
