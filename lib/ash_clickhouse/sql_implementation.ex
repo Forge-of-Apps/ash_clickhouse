@@ -2,6 +2,9 @@ defmodule AshClickhouse.SqlImplementation do
   @moduledoc false
   use AshSql.Implementation
 
+  alias Ash.Query.Function.Fragment
+  alias Ash.Query.Function.GetPath
+  alias Ash.Query.Ref
   alias AshClickhouse.DataLayer.Info
   alias AshClickhouse
 
@@ -60,6 +63,55 @@ defmodule AshClickhouse.SqlImplementation do
 
   @impl true
   def type_expr(expr, _type), do: expr
+
+  @impl true
+  def expr(
+        query,
+        %GetPath{
+          arguments: [%Ref{attribute: %{type: type, constraints: constraints}} = ref, path],
+          embedded?: pred_embedded?
+        },
+        bindings,
+        embedded?,
+        acc,
+        _type
+      )
+      when is_list(path) do
+    if json?(Ash.Type.storage_type(type, constraints)) do
+      subcolumn =
+        Enum.map_join(path, fn
+          segment when is_atom(segment) or is_binary(segment) ->
+            ".`" <> String.replace(to_string(segment), ["\\", "`"], &("\\" <> &1)) <> "`"
+
+          segment ->
+            raise ArgumentError,
+                  "#{inspect(segment)} in the path #{inspect(path)}: a ClickHouse JSON path names object keys only"
+        end)
+
+      {dynamic, acc} =
+        AshSql.Expr.dynamic_expr(
+          query,
+          %Fragment{embedded?: pred_embedded?, arguments: [expr: ref, raw: subcolumn]},
+          bindings,
+          embedded?,
+          nil,
+          acc
+        )
+
+      {:ok, dynamic, acc}
+    else
+      :error
+    end
+  end
+
+  def expr(_query, _expr, _bindings, _embedded?, _acc, _type), do: :error
+
+  defp json?({:parameterized, {Ch, ch_type}}) when ch_type in [:json, {:nullable, :json}],
+    do: true
+
+  defp json?({:parameterized, {Ch, "JSON(" <> _typed_paths}}), do: true
+  defp json?({:parameterized, {Ch, "Nullable(JSON(" <> _typed_paths}}), do: true
+  defp json?(_storage_type), do: false
 
   @impl true
   def determine_types(mod, args, returns \\ nil) do

@@ -149,4 +149,59 @@ defmodule AshClickhouse.TypedJsonTest do
                TestRepo.query!("SELECT toTypeName(j), toString(j.user.id) FROM typed_json_retype")
     end
   end
+
+  describe "path expressions" do
+    setup do
+      create!("example.com", %{user: %{id: "u1", visits: 1, plan: "pro"}, referrer: "search"})
+      create!("example.com", %{user: %{id: "u2", visits: 3}})
+      :ok
+    end
+
+    test "filter on a typed path" do
+      assert [%Pageview{visitor: %Visitor{user: %User{id: "u1"}}}] =
+               Pageview |> Ash.Query.filter(visitor[:user][:id] == "u1") |> Ash.read!()
+    end
+
+    test "compare a typed number as a number" do
+      assert [%Pageview{visitor: %Visitor{user: %User{id: "u2"}}}] =
+               Pageview |> Ash.Query.filter(visitor[:user][:visits] > 2) |> Ash.read!()
+    end
+
+    test "filter on a dynamic path" do
+      assert [%Pageview{visitor: %Visitor{referrer: "search"}}] =
+               Pageview |> Ash.Query.filter(visitor[:referrer] == "search") |> Ash.read!()
+    end
+
+    test "read a nullable typed path as nil where the field was nil" do
+      assert [%Pageview{visitor: %Visitor{user: %User{id: "u2", plan: nil}}}] =
+               Pageview |> Ash.Query.filter(is_nil(visitor[:user][:plan])) |> Ash.read!()
+    end
+
+    test "reach a union's members under value" do
+      for value <- [%{url: "https://example.com"}, %{code: "autumn"}] do
+        Referral
+        |> Ash.Changeset.for_create(:create, %{origin: value, at: DateTime.utc_now()})
+        |> Ash.create!()
+      end
+
+      assert [%Referral{origin: %Ash.Union{type: :link, value: %{url: "https://example.com"}}}] =
+               Referral
+               |> Ash.Query.filter(origin[:value][:url] == "https://example.com")
+               |> Ash.read!()
+
+      assert [%Referral{origin: %Ash.Union{type: :campaign, value: %{code: "autumn"}}}] =
+               Referral |> Ash.Query.filter(origin[:value][:code] == "autumn") |> Ash.read!()
+    end
+
+    test "read a key with dots as the nested path it spells, as ClickHouse stores it" do
+      assert [%Pageview{visitor: %Visitor{user: %User{id: "u1"}}}] =
+               Pageview |> Ash.Query.filter(get_path(visitor, ["user.id"]) == "u1") |> Ash.read!()
+    end
+
+    test "refuse an array position, which a JSON path cannot name" do
+      assert_raise Ash.Error.Unknown, ~r/a ClickHouse JSON path names object keys only/, fn ->
+        Pageview |> Ash.Query.filter(get_path(visitor, [:user, 0]) == "u1") |> Ash.read!()
+      end
+    end
+  end
 end
