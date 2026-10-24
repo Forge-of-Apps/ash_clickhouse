@@ -41,6 +41,9 @@ for size <- [8, 16, 32, 64, 128, 256] do
     AshClickhouse.Type.Helper.graphql_type(__MODULE__, :"ch_uint#{unquote(size)}", :integer)
 
     @impl true
+    def acts_as(_constraints), do: :integer
+
+    @impl true
     def matches_type?(v, _) do
       is_integer(v) and v >= 0 and v <= 2 ** unquote(size) - 1
     end

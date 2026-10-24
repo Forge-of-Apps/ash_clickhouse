@@ -9,5 +9,6 @@ defmodule AshClickhouse.Test.Domain do
     resource(AshClickhouse.Test.Resource.Pageview)
     resource(AshClickhouse.Test.Resource.Referral)
     resource(AshClickhouse.Test.Resource.Contact)
+    resource(AshClickhouse.Test.Resource.Visit)
   end
 end

@@ -2,11 +2,17 @@ defmodule AshClickhouse.SqlImplementation do
   @moduledoc false
   use AshSql.Implementation
 
+  alias Ash.Query.Function.Ago
+  alias Ash.Query.Function.DateAdd
+  alias Ash.Query.Function.DateTimeAdd
   alias Ash.Query.Function.Fragment
+  alias Ash.Query.Function.FromNow
   alias Ash.Query.Function.GetPath
   alias Ash.Query.Ref
   alias AshClickhouse.DataLayer.Info
   alias AshClickhouse
+
+  @duration_names Ash.Type.DurationName.values()
 
   # @callback expr(Ecto.Query.t(), Ash.Expr.t(), map, boolean, AshSql.Expr.ExprInfo.t(), term) ::
   #             {:ok, term, AshSql.Expr.ExprInfo.t()} | {:error, term} | :error
@@ -104,7 +110,52 @@ defmodule AshClickhouse.SqlImplementation do
     end
   end
 
+  def expr(query, %function{embedded?: pred_embedded?} = expr, bindings, embedded?, acc, _type)
+      when function in [Ago, FromNow, DateTimeAdd, DateAdd] do
+    case shifted(expr) do
+      nil ->
+        :error
+
+      arguments ->
+        {dynamic, acc} =
+          AshSql.Expr.dynamic_expr(
+            query,
+            %Fragment{embedded?: pred_embedded?, arguments: arguments},
+            bindings,
+            embedded?,
+            nil,
+            acc
+          )
+
+        {:ok, dynamic, acc}
+    end
+  end
+
   def expr(_query, _expr, _bindings, _embedded?, _acc, _type), do: :error
+
+  defp shifted(%Ago{arguments: [amount, unit]}),
+    do: shifted(DateTime.utc_now(), "-", amount, unit)
+
+  defp shifted(%FromNow{arguments: [amount, unit]}),
+    do: shifted(DateTime.utc_now(), "+", amount, unit)
+
+  defp shifted(%DateTimeAdd{arguments: [datetime, amount, unit]}),
+    do: shifted(datetime, "+", amount, unit)
+
+  defp shifted(%DateAdd{arguments: [date, amount, unit]}),
+    do: [{:raw, "toDate32"} | shifted(date, "+", amount, unit)]
+
+  defp shifted(_duration_form), do: nil
+
+  defp shifted(datetime, operator, amount, unit) when unit in @duration_names do
+    [
+      raw: "(",
+      expr: datetime,
+      raw: " #{operator} toInterval#{Macro.camelize(Atom.to_string(unit))}(",
+      expr: amount,
+      raw: "))"
+    ]
+  end
 
   defp json?({:parameterized, {Ch, ch_type}}) when ch_type in [:json, {:nullable, :json}],
     do: true
