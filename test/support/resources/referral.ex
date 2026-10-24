@@ -1,5 +1,5 @@
 defmodule AshClickhouse.Test.Resource.Referral do
-  @moduledoc "A table whose JSON column holds a union, its members' fields typed under `value`."
+  @moduledoc "A table sorted by the tag of the union in its JSON column."
 
   use Ash.Resource,
     domain: AshClickhouse.Test.Domain,
@@ -9,7 +9,7 @@ defmodule AshClickhouse.Test.Resource.Referral do
     table("referrals")
     repo(AshClickhouse.TestRepo)
     engine("MergeTree()")
-    options("order by at")
+    options("order by (origin.type, at)")
   end
 
   actions do

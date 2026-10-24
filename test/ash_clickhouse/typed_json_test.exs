@@ -91,6 +91,46 @@ defmodule AshClickhouse.TypedJsonTest do
     assert campaign == %{code: "autumn"}
   end
 
+  test "a table sorted by a union's tag stores the tag typed and reads back each row it wrote" do
+    for value <- [%{url: "https://example.com"}, %{code: "autumn"}] do
+      Referral
+      |> Ash.Changeset.for_create(:create, %{origin: value, at: DateTime.utc_now()})
+      |> Ash.create!()
+    end
+
+    %{"columns" => columns} = MigrationGenerator.snapshot(Referral)
+
+    assert %{rows: [[type, "origin.type, at"]]} =
+             TestRepo.query!("""
+             SELECT c.type, t.sorting_key
+             FROM system.columns AS c
+             JOIN system.tables AS t ON t.database = c.database AND t.name = c.table
+             WHERE c.database = currentDatabase() AND c.table = 'referrals' AND c.name = 'origin'
+             """)
+
+    assert %{"type" => ^type} = Enum.find(columns, &(&1["name"] == "origin"))
+
+    assert %{
+             rows: [
+               ["campaign", "LowCardinality(String)", "autumn"],
+               ["link", "LowCardinality(String)", ""]
+             ]
+           } =
+             TestRepo.query!("""
+             SELECT origin.type, toTypeName(origin.type), origin.value.code
+             FROM referrals
+             ORDER BY origin.type, at
+             """)
+
+    assert [%Referral{origin: %Ash.Union{type: :campaign, value: %{code: "autumn"}}}] =
+             Referral |> Ash.Query.filter(origin[:type] == "campaign") |> Ash.read!()
+
+    assert [
+             %Referral{origin: %Ash.Union{type: :link, value: %{url: "https://example.com"}}},
+             %Referral{origin: %Ash.Union{type: :campaign, value: %{code: "autumn"}}}
+           ] = Referral |> Ash.Query.sort(:at) |> Ash.read!()
+  end
+
   test "a union tagged inside its members' maps reads back each member it wrote" do
     for value <- [
           %{kind: "email", address: "a@example.com"},

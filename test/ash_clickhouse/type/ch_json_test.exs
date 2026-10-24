@@ -196,6 +196,23 @@ defmodule AshClickhouse.Type.ChJsonTest do
         ]
     end
 
+    defmodule Address do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [fields: [street: [type: ChString, allow_nil?: false]]]
+    end
+
+    defmodule Twins do
+      use Ash.Type.NewType,
+        subtype_of: :union,
+        constraints: [
+          types: [
+            billing: [type: AshClickhouse.Type.ChJsonTest.Address],
+            shipping: [type: AshClickhouse.Type.ChJsonTest.Address]
+          ]
+        ]
+    end
+
     defmodule Handle do
       use Ash.Type.NewType, subtype_of: AshClickhouse.Test.Resource.Types.Visitor.User
     end
@@ -304,16 +321,18 @@ defmodule AshClickhouse.Type.ChJsonTest do
                ChJSON.storage_type_of(Visitor)
     end
 
-    test "types a union's map members under value" do
-      assert {:parameterized, {Ch, "JSON(`value.code` String, `value.url` String)"}} =
+    test "types a union's tag, and its map members under value" do
+      assert {:parameterized,
+              {Ch, "JSON(type LowCardinality(String), `value.code` String, `value.url` String)"}} =
                Ash.Type.storage_type(Origin, [])
     end
 
-    test "leaves a union dynamic whole when a member is not a map" do
-      assert {:parameterized, {Ch, :json}} = ChJSON.storage_type_of(Mixed)
+    test "types only the tag of a union with a member that is not a map" do
+      assert {:parameterized, {Ch, "JSON(type LowCardinality(String))"}} =
+               ChJSON.storage_type_of(Mixed)
     end
 
-    test "types a :map_with_tag union's members at the top" do
+    test "types a :map_with_tag union's members at the top, with no tag of its own" do
       assert {:parameterized, {Ch, "JSON(url String)"}} = ChJSON.storage_type_of(Tagged)
     end
 
@@ -325,7 +344,8 @@ defmodule AshClickhouse.Type.ChJsonTest do
     end
 
     test "leaves a type nested in itself dynamic where it recurs" do
-      assert {:parameterized, {Ch, "JSON(`value.n` UInt32, `value.op` String)"}} =
+      assert {:parameterized,
+              {Ch, "JSON(type LowCardinality(String), `value.n` UInt32, `value.op` String)"}} =
                ChJSON.storage_type_of(Expr)
 
       assert {:parameterized, {Ch, "JSON(name String)"}} = ChJSON.storage_type_of(Tree)
@@ -344,14 +364,19 @@ defmodule AshClickhouse.Type.ChJsonTest do
     end
 
     test "types a path once that union members share" do
-      assert {:parameterized, {Ch, "JSON(`value.wallet` String)"}} =
+      assert {:parameterized, {Ch, "JSON(type LowCardinality(String), `value.wallet` String)"}} =
                ChJSON.storage_type_of(Shared)
     end
 
-    test "types nested unions, new types over new types and keyword fields" do
+    test "types a union whose members share one type" do
+      assert {:parameterized, {Ch, "JSON(type LowCardinality(String), `value.street` String)"}} =
+               ChJSON.storage_type_of(Twins)
+    end
+
+    test "types nested unions, their tags included, new types over new types and keyword fields" do
       assert {:parameterized,
               {Ch,
-               "JSON(`handle.id` String, `handle.plan` Nullable(String), `handle.visits` UInt32, `opts.mode` String, `origin.value.code` String, `origin.value.url` String)"}} =
+               "JSON(`handle.id` String, `handle.plan` Nullable(String), `handle.visits` UInt32, `opts.mode` String, `origin.type` LowCardinality(String), `origin.value.code` String, `origin.value.url` String)"}} =
                ChJSON.storage_type_of(Nested)
     end
 
@@ -366,6 +391,7 @@ defmodule AshClickhouse.Type.ChJsonTest do
       for type <- [
             Visitor,
             Origin,
+            Mixed,
             Fields,
             Tagged,
             Expr,
@@ -373,6 +399,7 @@ defmodule AshClickhouse.Type.ChJsonTest do
             Quoted,
             Names,
             Shared,
+            Twins,
             Nested,
             Shapes
           ] do

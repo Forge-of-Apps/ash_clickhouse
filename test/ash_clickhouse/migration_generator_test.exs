@@ -107,7 +107,7 @@ defmodule AshClickhouse.MigrationGeneratorTest do
 
     test "takes a storage type that is already a ClickHouse type as it is" do
       assert MigrationGenerator.column_type(Origin, []) ==
-               "JSON(`value.code` String, `value.url` String)"
+               "JSON(type LowCardinality(String), `value.code` String, `value.url` String)"
     end
 
     test "wraps an array's item type, constraints and all" do
@@ -117,7 +117,7 @@ defmodule AshClickhouse.MigrationGeneratorTest do
 
     test "refuses array items whose storage type ch could not name in an insert" do
       assert_raise RuntimeError,
-                   ~r/cannot store its items as JSON\(`value.code` String, `value.url` String\)/,
+                   ~r/cannot store its items as JSON\(type LowCardinality\(String\), `value.code` String, `value.url` String\)/,
                    fn ->
                      MigrationGenerator.column_type({:array, Origin}, [])
                    end
