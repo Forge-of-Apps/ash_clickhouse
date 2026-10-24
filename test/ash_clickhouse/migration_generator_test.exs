@@ -8,6 +8,9 @@ defmodule AshClickhouse.MigrationGeneratorTest do
   alias AshClickhouse.Test.Migration.EventCount
   alias AshClickhouse.Test.Migration.EventsByDayMv
   alias AshClickhouse.Test.Migration.RawSelect
+  alias AshClickhouse.Test.Resource.Pageview
+  alias AshClickhouse.Test.Resource.Types.Origin
+  alias AshClickhouse.Type.ChString
 
   defp snapshot(columns, overrides \\ %{}) do
     Map.merge(
@@ -97,6 +100,46 @@ defmodule AshClickhouse.MigrationGeneratorTest do
     end
   end
 
+  describe "column_type/2" do
+    test "encodes the storage type" do
+      assert MigrationGenerator.column_type(ChString, nullable?: true) == "Nullable(String)"
+    end
+
+    test "takes a storage type that is already a ClickHouse type as it is" do
+      assert MigrationGenerator.column_type(Origin, []) ==
+               "JSON(`value.code` String, `value.url` String)"
+    end
+
+    test "wraps an array's item type, constraints and all" do
+      assert MigrationGenerator.column_type({:array, ChString}, items: [nullable?: true]) ==
+               "Array(Nullable(String))"
+    end
+
+    test "refuses array items whose storage type ch could not name in an insert" do
+      assert_raise RuntimeError,
+                   ~r/cannot store its items as JSON\(`value.code` String, `value.url` String\)/,
+                   fn ->
+                     MigrationGenerator.column_type({:array, Origin}, [])
+                   end
+    end
+
+    test "names typed paths in the snapshot, where the sorting key may name them" do
+      assert %{
+               "options" => "order by (site, visitor.user.id, at)",
+               "columns" => [
+                 %{"name" => "id", "type" => "UUID"},
+                 %{"name" => "site", "type" => "String"},
+                 %{
+                   "name" => "visitor",
+                   "type" =>
+                     "JSON(`user.id` String, `user.plan` Nullable(String), `user.visits` UInt32)"
+                 },
+                 %{"name" => "at", "type" => "DateTime64(6)"}
+               ]
+             } = MigrationGenerator.snapshot(Pageview)
+    end
+  end
+
   describe "statements/3" do
     test "a resource with no snapshot creates its table and drops it on rollback" do
       new = %{"events" => snapshot([{"id", "UUID"}, {"name", "String"}])}
@@ -159,6 +202,22 @@ defmodule AshClickhouse.MigrationGeneratorTest do
       new = %{"events" => snapshot([{"id", "String"}])}
 
       assert_raise RuntimeError, ~r/id cannot be retyped/, fn ->
+        MigrationGenerator.statements(new, old, MapSet.new())
+      end
+    end
+
+    test "retyping a JSON column whose path the sorting key names raises" do
+      new = %{"pageviews" => MigrationGenerator.snapshot(Pageview)}
+
+      old =
+        update_in(new["pageviews"]["columns"], fn columns ->
+          Enum.map(columns, fn
+            %{"name" => "visitor"} = column -> %{column | "type" => "JSON(`user.id` String)"}
+            column -> column
+          end)
+        end)
+
+      assert_raise RuntimeError, ~r/visitor cannot be retyped/, fn ->
         MigrationGenerator.statements(new, old, MapSet.new())
       end
     end
