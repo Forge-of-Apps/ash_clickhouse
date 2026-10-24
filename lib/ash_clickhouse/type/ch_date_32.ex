@@ -32,6 +32,9 @@ defmodule AshClickhouse.Type.ChDate32 do
   def constraints, do: @constraints
 
   @impl true
+  def acts_as(_constraints), do: :date
+
+  @impl true
   def storage_type(constraints) do
     {:parameterized, {Ch, ch_type(constraints)}}
   end

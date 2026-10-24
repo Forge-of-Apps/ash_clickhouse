@@ -173,6 +173,15 @@ defmodule AshClickhouse.DataLayer do
   `uuid_primary_key` and `uuid_v7_primary_key` produce it; write the primary
   key out instead, as above.
 
+  ## Shifting dates and times
+
+  `ago/2`, `from_now/2`, `datetime_add/3` and `date_add/3` shift by
+  ClickHouse's `toInterval*` functions, so `at > ago(30, :day)` filters in the
+  database. The date, datetime and integer column types act as Ash's `:date`,
+  `:datetime` and `:integer` there, so `datetime_add(at, days, :day)` accepts
+  them. The forms taking a `Duration`, such as `ago(Duration.new!(day: 30))`,
+  are not supported.
+
   ## What ClickHouse does not do
 
   ClickHouse is an append-only column store, and the differences are not
