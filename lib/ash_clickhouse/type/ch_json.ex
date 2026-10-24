@@ -39,7 +39,7 @@ defmodule AshClickhouse.Type.ChJSON do
         def storage_type(_constraints), do: AshClickhouse.Type.ChJSON.storage_type_of(__MODULE__)
       end
 
-  A `MyApp.Visitor` column is then ``JSON(`id` String)``; see
+  A `MyApp.Visitor` column is then `JSON(id String)`; see
   `storage_type_of/1`.
 
   ### Constraints
@@ -75,31 +75,29 @@ defmodule AshClickhouse.Type.ChJSON do
   cannot be `Nullable`, and a nested map or union that allows nil, whose typed
   paths would read back as an object of defaults. A union with a member that is
   not a map stays dynamic whole, as that member's value would read back beside
-  the typed paths under a duplicate key.
-  Every row reads back every typed path, so union members must agree on a path
-  they share, or the type raises. A type nested in itself, directly or through
-  others, leaves its inner occurrence dynamic, as does an array of maps.
+  the typed paths under a duplicate key. For the same reason the type raises
+  where its members give one path different types, or a path a value of its own
+  and paths inside it. A type nested in itself leaves its inner occurrence
+  dynamic, as does an array of maps.
 
   `ch` has no term for typed JSON, so the storage type is the ClickHouse type as
-  a string: ch writes it into an insert's header as it is, which ClickHouse
-  requires to match the column, and reads the values as plain `JSON`. It is
+  a string, spelt as ClickHouse spells it: paths in byte order, quoted only where
+  ClickHouse quotes them. ch writes it into an insert's header as it is, and
+  ClickHouse compares that header with the column's type as a string. It is
   worked out once per type, as Ecto asks for it with every value it loads.
   """
   def storage_type_of(type) do
     key = {__MODULE__, type}
 
     with nil <- :persistent_term.get(key, nil) do
-      storage_type =
+      paths =
         type
         |> typed_paths([], [], false, [])
         |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
-        |> Enum.flat_map(fn {path, column_types} ->
+        |> Enum.map(fn {path, column_types} ->
           case Enum.uniq(column_types) do
-            [nil] ->
-              []
-
             [column_type] ->
-              ["`#{String.replace(path, ["\\", "`"], &("\\" <> &1))}` #{column_type}"]
+              {path, column_type}
 
             column_types ->
               raise ArgumentError,
@@ -108,9 +106,20 @@ defmodule AshClickhouse.Type.ChJSON do
           end
         end)
         |> Enum.sort()
-        |> case do
+
+      for {path, _column_type} <- paths,
+          {inner, _column_type} <- paths,
+          String.starts_with?(inner, path <> ".") do
+        raise ArgumentError,
+              "#{inspect(type)} gives the JSON path #{path} a value of its own and the path #{inner} inside it"
+      end
+
+      storage_type =
+        case for {path, column_type} <- paths,
+                 column_type,
+                 do: "#{identifier(path)} #{column_type}" do
           [] -> {:parameterized, {Ch, :json}}
-          paths -> {:parameterized, {Ch, "JSON(#{Enum.join(paths, ", ")})"}}
+          typed -> {:parameterized, {Ch, "JSON(#{Enum.join(typed, ", ")})"}}
         end
 
       :persistent_term.put(key, storage_type)
@@ -118,7 +127,14 @@ defmodule AshClickhouse.Type.ChJSON do
     end
   end
 
-  defp typed_paths({:array, _item_type}, _constraints, _path, false, _within), do: []
+  defp identifier(path) do
+    if path =~ ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/ and
+         String.downcase(path) not in ~w(null select all distinct table) do
+      path
+    else
+      "`" <> String.replace(path, ["\\", "`"], &("\\" <> &1)) <> "`"
+    end
+  end
 
   defp typed_paths({:array, item_type} = type, constraints, path, true, _within) do
     case !constraints[:nullable?] and Ash.Type.NewType.subtype_of(item_type) not in @json_types and
@@ -135,7 +151,7 @@ defmodule AshClickhouse.Type.ChJSON do
   defp typed_paths(type, constraints, path, field?, within) do
     cond do
       type in within ->
-        []
+        [{Enum.join(path, "."), nil}]
 
       Ash.Type.NewType.new_type?(type) ->
         typed_paths(
@@ -147,7 +163,7 @@ defmodule AshClickhouse.Type.ChJSON do
         )
 
       type in @json_types and constraints[:nullable?] ->
-        []
+        [{Enum.join(path, "."), nil}]
 
       type == Ash.Type.Union ->
         member_path =
@@ -171,7 +187,7 @@ defmodule AshClickhouse.Type.ChJSON do
             )
           end)
         else
-          []
+          [{Enum.join(path, "."), nil}]
         end
 
       type in @json_types ->
@@ -193,19 +209,31 @@ defmodule AshClickhouse.Type.ChJSON do
       not field? ->
         []
 
-      !constraints[:nullable?] or Keyword.has_key?(type.constraints(), :nullable?) ->
+      true ->
         case type.storage_type(constraints) do
-          {:parameterized, {Ch, ch_type}} when ch_type not in @json_storage ->
-            [{Enum.join(path, "."), MigrationGenerator.column_type(type, constraints)}]
+          {:parameterized, {Ch, ch_type}}
+          when ch_type not in @json_storage and not is_binary(ch_type) ->
+            if !constraints[:nullable?] or nullable_storage?(ch_type),
+              do: [{Enum.join(path, "."), MigrationGenerator.column_type(type, constraints)}],
+              else: [{Enum.join(path, "."), nil}]
 
           _storage_type ->
             [{Enum.join(path, "."), nil}]
         end
-
-      true ->
-        [{Enum.join(path, "."), nil}]
     end
   end
+
+  defp nullable_storage?({:low_cardinality, {:nullable, _type}}), do: true
+
+  defp nullable_storage?({:nullable, {kind, _type}}) when kind in [:array, :tuple, :variant],
+    do: false
+
+  defp nullable_storage?({:nullable, {:map, _key_type, _value_type}}), do: false
+
+  defp nullable_storage?({:nullable, type}),
+    do: type not in [:point, :ring, :polygon, :multipolygon, :dynamic]
+
+  defp nullable_storage?(_type), do: false
 
   def coerce(value, constraints), do: cast_input(value, constraints)
 

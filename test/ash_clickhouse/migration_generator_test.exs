@@ -206,6 +206,22 @@ defmodule AshClickhouse.MigrationGeneratorTest do
       end
     end
 
+    test "retyping a JSON column whose path the sorting key names raises" do
+      new = %{"pageviews" => MigrationGenerator.snapshot(Pageview)}
+
+      old =
+        update_in(new["pageviews"]["columns"], fn columns ->
+          Enum.map(columns, fn
+            %{"name" => "visitor"} = column -> %{column | "type" => "JSON(`user.id` String)"}
+            column -> column
+          end)
+        end)
+
+      assert_raise RuntimeError, ~r/visitor cannot be retyped/, fn ->
+        MigrationGenerator.statements(new, old, MapSet.new())
+      end
+    end
+
     test "dropping a column named in the sorting key raises" do
       old = %{"events" => snapshot([{"id", "UUID"}, {"name", "String"}])}
       new = %{"events" => snapshot([{"name", "String"}])}
