@@ -281,6 +281,12 @@ defmodule AshClickhouse.Type.ChJsonTest do
         ]
     end
 
+    defmodule Dotted do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [fields: ["user.id": [type: ChString, allow_nil?: false]]]
+    end
+
     defmodule Clashing do
       use Ash.Type.NewType,
         subtype_of: :union,
@@ -395,6 +401,12 @@ defmodule AshClickhouse.Type.ChJsonTest do
       assert_raise ArgumentError,
                    ~r/path value.x a value of its own and the path value.x.id inside it/,
                    fn -> ChJSON.storage_type_of(ScalarMapClash) end
+    end
+
+    test "refuses a field named with a dot, which ClickHouse reads back as nested objects" do
+      assert_raise ArgumentError, ~r/the field :"user.id" at "" would not read back/, fn ->
+        ChJSON.storage_type_of(Dotted)
+      end
     end
 
     test "is plain JSON when no field has a ClickHouse type" do

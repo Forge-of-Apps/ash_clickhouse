@@ -87,7 +87,8 @@ defmodule AshClickhouse.Type.ChJSON do
   the typed paths under a duplicate key. For the same reason the type raises
   where its members give one path different types, or a path a value of its own
   and paths inside it. A type nested in itself leaves its inner occurrence
-  dynamic, as does an array of maps.
+  dynamic, as does an array of maps. A field named with a dot raises, since
+  ClickHouse reads such a key back as nested objects, typed or not.
 
   `ch` has no term for typed JSON, so the storage type is the ClickHouse type as
   a string, spelt as ClickHouse spells it: paths in byte order, quoted only where
@@ -201,6 +202,12 @@ defmodule AshClickhouse.Type.ChJSON do
 
       type in @json_types ->
         Enum.flat_map(constraints[:fields] || [], fn {name, config} ->
+          if String.contains?(to_string(name), ".") do
+            raise ArgumentError,
+                  "the field #{inspect(name)} at #{inspect(Enum.join(path, "."))} would not read back: " <>
+                    "ClickHouse JSON reads a key with dots as nested objects"
+          end
+
           constraints =
             if Keyword.get(config, :allow_nil?, true),
               do: Keyword.put(config[:constraints] || [], :nullable?, true),
