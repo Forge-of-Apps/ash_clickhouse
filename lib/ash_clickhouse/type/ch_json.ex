@@ -5,6 +5,7 @@ defmodule AshClickhouse.Type.ChJSON do
   alias AshClickhouse.MigrationGenerator
 
   @json_types [Ash.Type.Union, Ash.Type.Map, Ash.Type.Struct, Ash.Type.Keyword]
+  @json_storage [:json, {:nullable, :json}]
 
   @constraints [
     nullable?: [
@@ -121,7 +122,7 @@ defmodule AshClickhouse.Type.ChJSON do
     case !constraints[:nullable?] and Ash.Type.NewType.subtype_of(item_type) not in @json_types and
            Ash.Type.storage_type(type, constraints) do
       {:array, {:parameterized, {Ch, ch_type}}}
-      when not is_binary(ch_type) and ch_type != :json ->
+      when not is_binary(ch_type) and ch_type not in @json_storage ->
         [{Enum.join(path, "."), MigrationGenerator.column_type(type, constraints)}]
 
       _storage_type ->
@@ -183,7 +184,7 @@ defmodule AshClickhouse.Type.ChJSON do
 
       !constraints[:nullable?] or Keyword.has_key?(type.constraints(), :nullable?) ->
         case type.storage_type(constraints) do
-          {:parameterized, {Ch, ch_type}} when ch_type not in [:json, {:nullable, :json}] ->
+          {:parameterized, {Ch, ch_type}} when ch_type not in @json_storage ->
             [{Enum.join(path, "."), MigrationGenerator.column_type(type, constraints)}]
 
           _storage_type ->

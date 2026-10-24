@@ -49,6 +49,12 @@ defmodule AshClickhouse.Type.ChJsonTest do
             required_level: [type: TestEnum8, allow_nil?: false],
             tags: [type: {:array, :ch_string}],
             required_tags: [type: {:array, :ch_string}, allow_nil?: false],
+            payloads: [type: {:array, ChJSON}, allow_nil?: false],
+            nullable_payloads: [
+              type: {:array, ChJSON},
+              allow_nil?: false,
+              constraints: [items: [nullable?: true]]
+            ],
             owner: [
               type: :map,
               constraints: [fields: [id: [type: ChString, allow_nil?: false]]]
