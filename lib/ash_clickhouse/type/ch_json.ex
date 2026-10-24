@@ -47,7 +47,9 @@ defmodule AshClickhouse.Type.ChJSON do
   `visitor[:id]` in a filter reads ClickHouse's subcolumn `visitor.id`. A typed
   path keeps its type; any other is `Dynamic`, which compares with literals and
   parameters as its stored value does. A path names object keys only, so an
-  array position in `get_path/2` raises.
+  array position in `get_path/2` raises. A key with dots names the nested path
+  they spell, as ClickHouse stores such a key unless `json_type_escape_dots_in_keys`
+  is on.
 
   ### Constraints
 

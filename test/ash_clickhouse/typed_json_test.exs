@@ -193,6 +193,11 @@ defmodule AshClickhouse.TypedJsonTest do
                Referral |> Ash.Query.filter(origin[:value][:code] == "autumn") |> Ash.read!()
     end
 
+    test "read a key with dots as the nested path it spells, as ClickHouse stores it" do
+      assert [%Pageview{visitor: %Visitor{user: %User{id: "u1"}}}] =
+               Pageview |> Ash.Query.filter(get_path(visitor, ["user.id"]) == "u1") |> Ash.read!()
+    end
+
     test "refuse an array position, which a JSON path cannot name" do
       assert_raise Ash.Error.Unknown, ~r/a ClickHouse JSON path names object keys only/, fn ->
         Pageview |> Ash.Query.filter(get_path(visitor, [:user, 0]) == "u1") |> Ash.read!()
