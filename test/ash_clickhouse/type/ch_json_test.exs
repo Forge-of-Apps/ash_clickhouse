@@ -151,6 +151,17 @@ defmodule AshClickhouse.Type.ChJsonTest do
         ]
     end
 
+    defmodule Quoted do
+      use Ash.Type.NewType,
+        subtype_of: :map,
+        constraints: [
+          fields: [
+            "we`ird": [type: ChString, allow_nil?: false],
+            "back\\slash": [type: ChString, allow_nil?: false]
+          ]
+        ]
+    end
+
     defmodule Clashing do
       use Ash.Type.NewType,
         subtype_of: :union,
@@ -193,6 +204,11 @@ defmodule AshClickhouse.Type.ChJsonTest do
                ChJSON.storage_type_of(Expr)
 
       assert {:parameterized, {Ch, "JSON(`name` String)"}} = ChJSON.storage_type_of(Tree)
+    end
+
+    test "escapes backticks and backslashes in a path" do
+      assert {:parameterized, {Ch, ~S"JSON(`back\\slash` String, `we\`ird` String)"}} =
+               ChJSON.storage_type_of(Quoted)
     end
 
     test "is plain JSON when no field has a ClickHouse type" do

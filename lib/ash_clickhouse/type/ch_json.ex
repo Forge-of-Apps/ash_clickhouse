@@ -99,7 +99,7 @@ defmodule AshClickhouse.Type.ChJSON do
               []
 
             [column_type] ->
-              ["`#{path}` #{column_type}"]
+              ["`#{String.replace(path, ["\\", "`"], &("\\" <> &1))}` #{column_type}"]
 
             column_types ->
               raise ArgumentError,
