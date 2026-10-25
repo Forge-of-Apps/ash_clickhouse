@@ -112,7 +112,8 @@ defmodule AshClickhouse.SqlImplementation do
 
   def expr(query, %function{embedded?: pred_embedded?} = expr, bindings, embedded?, acc, _type)
       when function in [Ago, FromNow, DateTimeAdd, DateAdd] do
-    arguments = if nil in expr.arguments, do: [raw: "NULL"], else: shifted(expr)
+    now = get_in(query.__ash_bindings__, [:context, :private, :as_of]) || DateTime.utc_now()
+    arguments = if nil in expr.arguments, do: [raw: "NULL"], else: shifted(expr, now)
 
     {dynamic, acc} =
       AshSql.Expr.dynamic_expr(
@@ -129,23 +130,14 @@ defmodule AshClickhouse.SqlImplementation do
 
   def expr(_query, _expr, _bindings, _embedded?, _acc, _type), do: :error
 
-  defp shifted(%Ago{arguments: arguments}),
-    do: in_utc(DateTime.utc_now(), steps("-", arguments))
+  defp shifted(%Ago{arguments: arguments}, now), do: in_utc(now, steps("-", arguments))
 
-  defp shifted(%FromNow{arguments: arguments}),
-    do: in_utc(DateTime.utc_now(), steps("+", arguments))
+  defp shifted(%FromNow{arguments: arguments}, now), do: in_utc(now, steps("+", arguments))
 
-  defp shifted(%DateTimeAdd{arguments: [datetime | arguments]}),
+  defp shifted(%DateTimeAdd{arguments: [datetime | arguments]}, _now),
     do: in_utc(datetime, steps("+", arguments))
 
-  defp shifted(%DateAdd{arguments: [_date, %Duration{} = duration]})
-       when duration.hour != 0 or duration.minute != 0 or duration.second != 0 or
-              elem(duration.microsecond, 0) != 0 do
-    raise ArgumentError,
-          "cannot shift date by time scale unit. Expected :year, :month, :week, :day"
-  end
-
-  defp shifted(%DateAdd{arguments: [date | arguments]}) do
+  defp shifted(%DateAdd{arguments: [date | arguments]}, _now) do
     start = [raw: "toDateTime64(", expr: date, raw: ", 0, 'UTC')"]
     [raw: "toDate32("] ++ Enum.reduce(steps("+", arguments), start, &step/2) ++ [raw: ")"]
   end
@@ -172,16 +164,6 @@ defmodule AshClickhouse.SqlImplementation do
   defp steps(_operator, [duration]) do
     raise ArgumentError,
           "ClickHouse has no value for a Duration, so a date or time can only be shifted by one known when the query is built, got: #{inspect(duration)}"
-  end
-
-  defp step({operator, amount, :year}, value) do
-    shifted =
-      [raw: "("] ++ value ++ [raw: " #{operator} toIntervalYear(", expr: amount, raw: "))"]
-
-    [raw: "("] ++
-      shifted ++
-      [raw: " + toIntervalDay(toDayOfMonth("] ++
-      shifted ++ [raw: ") < toDayOfMonth("] ++ value ++ [raw: ")))"]
   end
 
   defp step({operator, amount, unit}, value) when unit in @duration_names do
