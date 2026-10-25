@@ -8,19 +8,15 @@ defmodule AshClickhouse.IntervalTest do
 
   @instants [~U[2026-01-30 23:30:00Z], ~U[2024-02-29 23:30:00Z], ~U[2026-03-28 23:30:00Z]]
 
-  @date_durations [
+  @durations [
     Duration.new!(year: 1, month: 1),
     Duration.new!(year: -1),
     Duration.new!(month: 1, day: -1),
     Duration.new!(week: 2),
-    Duration.new!(day: 0)
+    Duration.new!(day: 0),
+    Duration.new!(week: 1, hour: 25, minute: -90),
+    Duration.new!(month: -1, second: 30, microsecond: {250, 6})
   ]
-
-  @durations @date_durations ++
-               [
-                 Duration.new!(week: 1, hour: 25, minute: -90),
-                 Duration.new!(month: -1, second: 30, microsecond: {250, 6})
-               ]
 
   setup do
     TestRepo.query!("TRUNCATE TABLE visits")
@@ -43,12 +39,19 @@ defmodule AshClickhouse.IntervalTest do
 
   defp pages(query), do: query |> Ash.read!() |> Enum.map(& &1.page) |> Enum.sort()
 
-  defp assert_same_as_in_memory(visit, expression) do
-    {:ok, expected} = Ash.Expr.eval(expression, record: visit, resource: Visit)
-
+  defp assert_lands(expression, expected) do
     assert {expression, ["visit"]} ==
              {expression, Visit |> Ash.Query.filter(^expression == ^expected) |> pages()}
   end
+
+  defp shift(%Date{} = date, duration),
+    do: date |> DateTime.new!(~T[00:00:00]) |> DateTime.shift(duration) |> DateTime.to_date()
+
+  defp shift(datetime, duration), do: DateTime.shift(datetime, duration)
+
+  defp duration(:millisecond, amount), do: Duration.new!(microsecond: {amount * 1000, 3})
+  defp duration(:microsecond, amount), do: Duration.new!(microsecond: {amount, 6})
+  defp duration(unit, amount), do: Duration.new!([{unit, amount}])
 
   test "a read action filters by ago/2" do
     now = DateTime.utc_now()
@@ -99,35 +102,57 @@ defmodule AshClickhouse.IntervalTest do
              Visit |> Ash.Query.filter(datetime_add(at, stay_days, :day) > now()) |> pages()
   end
 
-  test "shifting by a unit lands where Ash lands in memory" do
+  test "shifting by a unit lands where a Postgres interval lands" do
     for instant <- @instants do
       TestRepo.query!("TRUNCATE TABLE visits")
       visit!("visit", instant)
-      visit = Ash.read_one!(Visit)
+      date = DateTime.to_date(instant)
 
       for unit <- Ash.Type.DurationName.values(), amount <- [1, -1] do
-        assert_same_as_in_memory(visit, Ash.Expr.expr(datetime_add(at, ^amount, ^unit)))
-        assert_same_as_in_memory(visit, Ash.Expr.expr(datetime_add(local_at, ^amount, ^unit)))
-        assert_same_as_in_memory(visit, Ash.Expr.expr(date_add(on, ^amount, ^unit)))
+        duration = duration(unit, amount)
+        assert_lands(Ash.Expr.expr(datetime_add(at, ^amount, ^unit)), shift(instant, duration))
+
+        assert_lands(
+          Ash.Expr.expr(datetime_add(local_at, ^amount, ^unit)),
+          shift(instant, duration)
+        )
+
+        assert_lands(Ash.Expr.expr(date_add(on, ^amount, ^unit)), shift(date, duration))
       end
     end
   end
 
-  test "shifting by a Duration lands where Ash lands in memory" do
+  test "shifting by a Duration lands where a Postgres interval lands" do
     for instant <- @instants do
       TestRepo.query!("TRUNCATE TABLE visits")
       visit!("visit", instant)
-      visit = Ash.read_one!(Visit)
+      date = DateTime.to_date(instant)
 
       for duration <- @durations do
-        assert_same_as_in_memory(visit, Ash.Expr.expr(datetime_add(at, ^duration)))
-        assert_same_as_in_memory(visit, Ash.Expr.expr(datetime_add(local_at, ^duration)))
-      end
-
-      for duration <- @date_durations do
-        assert_same_as_in_memory(visit, Ash.Expr.expr(date_add(on, ^duration)))
+        assert_lands(Ash.Expr.expr(datetime_add(at, ^duration)), shift(instant, duration))
+        assert_lands(Ash.Expr.expr(datetime_add(local_at, ^duration)), shift(instant, duration))
+        assert_lands(Ash.Expr.expr(date_add(on, ^duration)), shift(date, duration))
       end
     end
+  end
+
+  test "ago and from_now count from a read's as_of" do
+    as_of = ~U[2026-01-15 12:00:00Z]
+    visit!("short", ~U[2026-01-10 12:00:00Z], 3)
+    visit!("long", ~U[2026-01-10 12:00:00Z], 7)
+    visit!("later", ~U[2026-03-01 12:00:00Z])
+
+    assert ["later", "long"] =
+             Visit
+             |> Ash.Query.filter(at > ago(stay_days, :day))
+             |> Ash.Query.as_of(as_of)
+             |> pages()
+
+    assert ["long", "short"] =
+             Visit
+             |> Ash.Query.filter(at < from_now(^Duration.new!(day: 1)))
+             |> Ash.Query.as_of(as_of)
+             |> pages()
   end
 
   test "the session's time zone does not move a shift" do
@@ -151,14 +176,6 @@ defmodule AshClickhouse.IntervalTest do
 
     assert ["visit"] = Visit |> Ash.Query.filter(is_nil(date_add(on, ^nil))) |> pages()
     assert ["visit"] = Visit |> Ash.Query.filter(is_nil(ago(^nil))) |> pages()
-  end
-
-  test "date_add/2 refuses time units, as Date.shift does" do
-    visit!("visit", ~U[2026-01-30 23:30:00Z])
-
-    assert_raise Ash.Error.Unknown, ~r/cannot shift date by time scale unit/, fn ->
-      Visit |> Ash.Query.filter(date_add(on, ^Duration.new!(hour: 25)) > today()) |> pages()
-    end
   end
 
   test "a Duration or unit only known in the database is refused" do

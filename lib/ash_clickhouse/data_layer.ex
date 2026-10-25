@@ -177,10 +177,13 @@ defmodule AshClickhouse.DataLayer do
 
   `ago`, `from_now`, `datetime_add` and `date_add` shift in the database, by a
   unit (`ago(30, :day)`) or a `Duration` (`ago(Duration.new!(day: 30))`), and
-  land where Ash lands evaluating them in memory: in UTC whatever the server's
-  or the column's time zone, a `Duration`'s years and months before the rest, as
-  `DateTime.shift/2` does, and `:year` taking Feb 29 to Mar 1 outside leap
-  years. The date, datetime and integer column types act as Ash's `:date`,
+  land where AshPostgres lands: in UTC whatever the server's or the column's
+  time zone, by whole months first and then the rest, as Postgres intervals and
+  `DateTime.shift/2` do (Feb 29 plus a year is Feb 28), with a date shifted by
+  hours truncated back to a date, and from a read's `as_of` when it has one.
+  Ash's in-memory evaluation differs on two of these: it takes Feb 29 plus a
+  `:year` to Mar 1, and refuses to shift a date by a `Duration` with hours.
+  The date, datetime and integer column types act as Ash's `:date`,
   `:datetime` and `:integer` there, so `datetime_add(at, days, :day)` accepts
   them. ClickHouse has no value for a `Duration` and names an interval's unit
   in the query, so both must be known when the query is built.
