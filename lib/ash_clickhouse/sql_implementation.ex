@@ -112,49 +112,91 @@ defmodule AshClickhouse.SqlImplementation do
 
   def expr(query, %function{embedded?: pred_embedded?} = expr, bindings, embedded?, acc, _type)
       when function in [Ago, FromNow, DateTimeAdd, DateAdd] do
-    case shifted(expr) do
-      nil ->
-        :error
+    arguments = if nil in expr.arguments, do: [raw: "NULL"], else: shifted(expr)
 
-      arguments ->
-        {dynamic, acc} =
-          AshSql.Expr.dynamic_expr(
-            query,
-            %Fragment{embedded?: pred_embedded?, arguments: arguments},
-            bindings,
-            embedded?,
-            nil,
-            acc
-          )
+    {dynamic, acc} =
+      AshSql.Expr.dynamic_expr(
+        query,
+        %Fragment{embedded?: pred_embedded?, arguments: arguments},
+        bindings,
+        embedded?,
+        nil,
+        acc
+      )
 
-        {:ok, dynamic, acc}
-    end
+    {:ok, dynamic, acc}
   end
 
   def expr(_query, _expr, _bindings, _embedded?, _acc, _type), do: :error
 
-  defp shifted(%Ago{arguments: [amount, unit]}),
-    do: shifted(DateTime.utc_now(), "-", amount, unit)
+  defp shifted(%Ago{arguments: arguments}),
+    do: in_utc(DateTime.utc_now(), steps("-", arguments))
 
-  defp shifted(%FromNow{arguments: [amount, unit]}),
-    do: shifted(DateTime.utc_now(), "+", amount, unit)
+  defp shifted(%FromNow{arguments: arguments}),
+    do: in_utc(DateTime.utc_now(), steps("+", arguments))
 
-  defp shifted(%DateTimeAdd{arguments: [datetime, amount, unit]}),
-    do: shifted(datetime, "+", amount, unit)
+  defp shifted(%DateTimeAdd{arguments: [datetime | arguments]}),
+    do: in_utc(datetime, steps("+", arguments))
 
-  defp shifted(%DateAdd{arguments: [date, amount, unit]}),
-    do: [{:raw, "toDate32"} | shifted(date, "+", amount, unit)]
+  defp shifted(%DateAdd{arguments: [_date, %Duration{} = duration]})
+       when duration.hour != 0 or duration.minute != 0 or duration.second != 0 or
+              elem(duration.microsecond, 0) != 0 do
+    raise ArgumentError,
+          "cannot shift date by time scale unit. Expected :year, :month, :week, :day"
+  end
 
-  defp shifted(_duration_form), do: nil
+  defp shifted(%DateAdd{arguments: [date | arguments]}) do
+    start = [raw: "toDateTime64(", expr: date, raw: ", 0, 'UTC')"]
+    [raw: "toDate32("] ++ Enum.reduce(steps("+", arguments), start, &step/2) ++ [raw: ")"]
+  end
 
-  defp shifted(datetime, operator, amount, unit) when unit in @duration_names do
+  defp in_utc(datetime, steps),
+    do: Enum.reduce(steps, [raw: "toTimeZone(", expr: datetime, raw: ", 'UTC')"], &step/2)
+
+  defp steps(operator, [amount, unit]), do: [{operator, amount, unit}]
+
+  defp steps(operator, [%Duration{} = duration]) do
     [
-      raw: "(",
-      expr: datetime,
-      raw: " #{operator} toInterval#{Macro.camelize(Atom.to_string(unit))}(",
-      expr: amount,
-      raw: "))"
+      month: duration.year * 12 + duration.month,
+      week: duration.week,
+      day: duration.day,
+      hour: duration.hour,
+      minute: duration.minute,
+      second: duration.second,
+      microsecond: elem(duration.microsecond, 0)
     ]
+    |> Enum.reject(&match?({_unit, 0}, &1))
+    |> Enum.map(fn {unit, amount} -> {operator, amount, unit} end)
+  end
+
+  defp steps(_operator, [duration]) do
+    raise ArgumentError,
+          "ClickHouse has no value for a Duration, so a date or time can only be shifted by one known when the query is built, got: #{inspect(duration)}"
+  end
+
+  defp step({operator, amount, :year}, value) do
+    shifted =
+      [raw: "("] ++ value ++ [raw: " #{operator} toIntervalYear(", expr: amount, raw: "))"]
+
+    [raw: "("] ++
+      shifted ++
+      [raw: " + toIntervalDay(toDayOfMonth("] ++
+      shifted ++ [raw: ") < toDayOfMonth("] ++ value ++ [raw: ")))"]
+  end
+
+  defp step({operator, amount, unit}, value) when unit in @duration_names do
+    [raw: "("] ++
+      value ++
+      [
+        raw: " #{operator} toInterval#{Macro.camelize(Atom.to_string(unit))}(",
+        expr: amount,
+        raw: "))"
+      ]
+  end
+
+  defp step({_operator, _amount, unit}, _value) do
+    raise ArgumentError,
+          "ClickHouse names the unit of an interval in the query, so it must be known when the query is built, got: #{inspect(unit)}"
   end
 
   defp json?({:parameterized, {Ch, ch_type}}) when ch_type in [:json, {:nullable, :json}],

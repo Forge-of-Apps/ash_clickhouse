@@ -7,6 +7,7 @@ defmodule AshClickhouse.TestRepo.Migrations.CreateVisits do
       id UUID,
       page String,
       at DateTime,
+      local_at DateTime('Europe/Berlin'),
       stay_days UInt16,
       on Date
     ) ENGINE = MergeTree()

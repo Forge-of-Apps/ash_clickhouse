@@ -175,12 +175,15 @@ defmodule AshClickhouse.DataLayer do
 
   ## Shifting dates and times
 
-  `ago/2`, `from_now/2`, `datetime_add/3` and `date_add/3` shift by
-  ClickHouse's `toInterval*` functions, so `at > ago(30, :day)` filters in the
-  database. The date, datetime and integer column types act as Ash's `:date`,
+  `ago`, `from_now`, `datetime_add` and `date_add` shift in the database, by a
+  unit (`ago(30, :day)`) or a `Duration` (`ago(Duration.new!(day: 30))`), and
+  land where Ash lands evaluating them in memory: in UTC whatever the server's
+  or the column's time zone, a `Duration`'s years and months before the rest, as
+  `DateTime.shift/2` does, and `:year` taking Feb 29 to Mar 1 outside leap
+  years. The date, datetime and integer column types act as Ash's `:date`,
   `:datetime` and `:integer` there, so `datetime_add(at, days, :day)` accepts
-  them. The forms taking a `Duration`, such as `ago(Duration.new!(day: 30))`,
-  are not supported.
+  them. ClickHouse has no value for a `Duration` and names an interval's unit
+  in the query, so both must be known when the query is built.
 
   ## What ClickHouse does not do
 

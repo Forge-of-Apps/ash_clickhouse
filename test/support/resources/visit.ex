@@ -24,6 +24,11 @@ defmodule AshClickhouse.Test.Resource.Visit do
       argument(:days, :integer, allow_nil?: false)
       filter(expr(at > ago(^arg(:days), :day)))
     end
+
+    read :within do
+      argument(:window, :duration, allow_nil?: false)
+      filter(expr(at > ago(^arg(:window))))
+    end
   end
 
   attributes do
@@ -36,6 +41,13 @@ defmodule AshClickhouse.Test.Resource.Visit do
 
     attribute(:page, AshClickhouse.Type.ChString, public?: true, allow_nil?: false)
     attribute(:at, AshClickhouse.Type.ChDateTime, public?: true, allow_nil?: false)
+
+    attribute(:local_at, AshClickhouse.Type.ChDateTime,
+      public?: true,
+      allow_nil?: false,
+      constraints: [timezone: "Europe/Berlin"]
+    )
+
     attribute(:stay_days, AshClickhouse.Type.ChUint16, public?: true, allow_nil?: false)
     attribute(:on, AshClickhouse.Type.ChDate, public?: true, allow_nil?: false)
   end

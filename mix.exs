@@ -49,6 +49,7 @@ defmodule AshClickhouse.MixProject do
       {:ash_sql, ash_sql_version("~> 0.7 and >= 0.7.1")},
       {:excoveralls, "~> 0.18", only: :test},
       {:machete, "~> 0.3.11", only: :test},
+      {:tz, "~> 0.28", only: :test},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:ex_doc, "~> 0.38", only: [:dev], runtime: false}
       # {:git_ops, "~> 2.5", only: [:dev, :test]},
