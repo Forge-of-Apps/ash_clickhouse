@@ -45,6 +45,9 @@ for size <- [8, 16, 32, 64, 128, 256] do
     end
 
     @impl true
+    def acts_as(_constraints), do: :integer
+
+    @impl true
     def matches_type?(v, _) do
       is_integer(v)
     end

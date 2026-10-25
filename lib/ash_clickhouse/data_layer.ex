@@ -173,6 +173,18 @@ defmodule AshClickhouse.DataLayer do
   `uuid_primary_key` and `uuid_v7_primary_key` produce it; write the primary
   key out instead, as above.
 
+  ## Shifting dates and times
+
+  `ago`, `from_now`, `datetime_add` and `date_add` shift in the database, by a
+  unit (`ago(30, :day)`) or a `Duration` (`ago(Duration.new!(day: 30))`), and
+  land where Ash lands evaluating them in memory: in UTC whatever the server's
+  or the column's time zone, a `Duration`'s years and months before the rest, as
+  `DateTime.shift/2` does, and `:year` taking Feb 29 to Mar 1 outside leap
+  years. The date, datetime and integer column types act as Ash's `:date`,
+  `:datetime` and `:integer` there, so `datetime_add(at, days, :day)` accepts
+  them. ClickHouse has no value for a `Duration` and names an interval's unit
+  in the query, so both must be known when the query is built.
+
   ## What ClickHouse does not do
 
   ClickHouse is an append-only column store, and the differences are not

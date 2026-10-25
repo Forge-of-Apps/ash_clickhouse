@@ -54,6 +54,9 @@ defmodule AshClickhouse.Type.ChDateTime do
   def constraints, do: @constraints
 
   @impl true
+  def acts_as(_constraints), do: :datetime
+
+  @impl true
   def cast_atomic(new_value, _constraints) do
     {:atomic, new_value}
   end
