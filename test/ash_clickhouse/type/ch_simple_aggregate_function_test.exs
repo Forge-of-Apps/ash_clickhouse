@@ -68,11 +68,10 @@ defmodule AshClickhouse.Type.ChSimpleAggregateFunctionTest do
       constraints = [function: "min", type: [ch_datetime: [timezone: "UTC"]]]
 
       assert {:ok, ~U[2026-01-02 03:04:05Z]} =
-               Ash.Type.cast_input(
-                 ChSimpleAggregateFunction,
-                 ~U[2026-01-02 03:04:05Z],
-                 constraints
-               )
+               Ash.Type.cast_input(ChSimpleAggregateFunction, "2026-01-02 03:04:05", constraints)
+
+      assert {:error, _} =
+               Ash.Type.cast_input(ChSimpleAggregateFunction, "not a time", constraints)
     end
   end
 end
