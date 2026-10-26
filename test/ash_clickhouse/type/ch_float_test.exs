@@ -187,6 +187,48 @@ defmodule AshClickhouse.Type.ChFloatTest do
         )
       end)
     end
+
+    test "draws a first float between greater_than and less_than every time" do
+      for module <- [ChFloat32, ChFloat64],
+          constraints <- [
+            [greater_than: 100.2345, less_than: 1000.2350],
+            [greater_than: -1.0, less_than: 0.0],
+            [greater_than: 0.0, less_than: 1.0e-300]
+          ] do
+        firsts =
+          for _ <- 1..2_000,
+              do: module |> Ash.Type.generator(constraints) |> Enum.take(1) |> hd()
+
+        assert Enum.all?(
+                 firsts,
+                 &(&1 > constraints[:greater_than] and &1 < constraints[:less_than])
+               )
+      end
+    end
+
+    test "draws the floats next to greater_than and less_than, never the bounds" do
+      firsts =
+        for _ <- 1..200,
+            do:
+              ChFloat64
+              |> Ash.Type.generator(greater_than: 1.0, less_than: 2.0)
+              |> Enum.take(1)
+              |> hd()
+
+      assert 1.0000000000000002 in firsts
+      assert 1.9999999999999998 in firsts
+      refute 1.0 in firsts
+      refute 2.0 in firsts
+    end
+
+    test "keeps to the tighter of min and greater_than, and of max and less_than" do
+      values =
+        ChFloat64
+        |> Ash.Type.generator(min: 0.0, greater_than: 0.5, max: 2.0, less_than: 1.0)
+        |> Enum.take(500)
+
+      assert Enum.all?(values, &(&1 > 0.5 and &1 < 1.0))
+    end
   end
 
   describe "apply_constraints/2" do

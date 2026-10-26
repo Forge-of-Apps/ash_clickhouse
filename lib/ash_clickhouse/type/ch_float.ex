@@ -89,15 +89,28 @@ for size <- [32, 64] do
 
     @impl true
     def generator(constraints) do
-      [
-        min: constraints[:min] || constraints[:greater_than] || -1.0e10,
-        max: constraints[:max] || constraints[:less_than] || 1.0e10
-      ]
-      |> StreamData.float()
-      |> StreamData.filter(fn value ->
-        (!constraints[:less_than] || value < constraints[:less_than]) &&
-          (!constraints[:greater_than] || value > constraints[:greater_than])
-      end)
+      StreamData.float(
+        min:
+          [
+            constraints[:min],
+            constraints[:greater_than] && adjacent(constraints[:greater_than], 1)
+          ]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.max(fn -> -1.0e10 end),
+        max:
+          [constraints[:max], constraints[:less_than] && adjacent(constraints[:less_than], -1)]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.min(fn -> 1.0e10 end)
+      )
+    end
+
+    # The float `step` representable floats above `float`, so that an exclusive bound becomes
+    # the inclusive one next to it: StreamData lands on a range's ends most of the time.
+    defp adjacent(float, step) do
+      <<sign::1, magnitude::63>> = <<float::float-64>>
+      next = if(sign == 0, do: magnitude, else: -magnitude) + step
+      <<adjacent::float-64>> = if next >= 0, do: <<0::1, next::63>>, else: <<1::1, -next::63>>
+      adjacent
     end
 
     @impl true
