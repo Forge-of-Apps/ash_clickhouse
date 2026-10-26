@@ -48,6 +48,9 @@ defmodule AshClickhouse.Type.ChSimpleAggregateFunction do
         [{type, constraints}] ->
           Ash.Type.get_type(type).ch_type(constraints)
 
+        {type, constraints} ->
+          Ash.Type.get_type(type).ch_type(constraints)
+
         type ->
           Ash.Type.get_type(type).ch_type([])
       end
