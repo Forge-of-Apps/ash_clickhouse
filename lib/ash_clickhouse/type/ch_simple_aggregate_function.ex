@@ -10,7 +10,10 @@ defmodule AshClickhouse.Type.ChSimpleAggregateFunction do
     ],
     type: [
       type: {:or, [:atom, :keyword_list]},
-      doc: "The type of the function: SUM, AVG, MIN, MAX, etc.",
+      doc: """
+      The type the function aggregates: a type, or a type with its constraints as a one-entry
+      keyword list, as `ChMap` takes them, such as `[ch_datetime: [timezone: "UTC"]]`.
+      """,
       required: true
     ],
     low_cardinality?: [
@@ -42,6 +45,9 @@ defmodule AshClickhouse.Type.ChSimpleAggregateFunction do
   def ch_type(constraints) do
     type =
       case constraints[:type] do
+        [{type, constraints}] ->
+          Ash.Type.get_type(type).ch_type(constraints)
+
         {type, constraints} ->
           Ash.Type.get_type(type).ch_type(constraints)
 
