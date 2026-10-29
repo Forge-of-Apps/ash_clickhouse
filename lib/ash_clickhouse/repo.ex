@@ -29,12 +29,10 @@ defmodule AshClickhouse.Repo do
   the default only ever reaches `schema_migrations` itself.
 
   This settles the engine for databases created from here on. One whose
-  `schema_migrations` already exists keeps the engine it was made with, and a
-  rollback against it still fails on removing the version row. Check with
-  `SELECT engine FROM system.tables WHERE name = 'schema_migrations'`, and
-  recreate the table if it says `TinyLog` — it holds nothing but applied
-  versions, so `CREATE TABLE ... ENGINE = MergeTree ORDER BY version AS SELECT
-  * FROM schema_migrations` under a new name, then swap them, loses nothing.
+  `schema_migrations` already exists keeps the engine it was made with until a
+  rollback needs it: `mix ash_clickhouse.rollback`, and `mix ash.codegen`
+  replacing dev migrations that were applied, first recreate a `TinyLog` one as
+  a `MergeTree` in place, keeping every version it holds.
   """
 
   @doc """

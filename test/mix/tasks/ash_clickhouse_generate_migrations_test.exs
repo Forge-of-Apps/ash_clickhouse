@@ -199,6 +199,47 @@ defmodule Mix.Tasks.AshClickhouse.GenerateMigrationsTest do
       assert %{rows: [[1]]} = repo.query!("EXISTS TABLE events")
     end
 
+    test "a TinyLog schema_migrations becomes a MergeTree so the dev versions can leave it",
+         ctx do
+      repo = AshClickhouse.TestRepo
+
+      tables =
+        AshClickhouse.Test.Migration.Domain
+        |> Ash.Domain.Info.resources()
+        |> Enum.map(&AshClickhouse.DataLayer.Info.table/1)
+
+      on_exit(fn ->
+        AshClickhouse.Mix.Helpers.ensure_deletable_schema_migrations!(repo, nil)
+        Enum.each(tables, &repo.query!("DROP TABLE IF EXISTS #{&1}"))
+      end)
+
+      repo.query!(
+        "CREATE OR REPLACE TABLE schema_migrations ENGINE = TinyLog AS SELECT * FROM schema_migrations"
+      )
+
+      run(["--dev"], ctx)
+      Ecto.Migrator.run(repo, ctx.migrations, :up, all: true, log: false)
+
+      [dev] = migrations(ctx)
+      {dev_version, _} = Integer.parse(dev)
+      applied = Enum.sort(Ecto.Migrator.migrated_versions(repo))
+
+      assert dev_version in applied
+
+      run(["add_events"], ctx)
+
+      assert %{rows: [["MergeTree"]]} =
+               repo.query!(
+                 "SELECT engine FROM system.tables WHERE database = currentDatabase() AND name = 'schema_migrations'"
+               )
+
+      assert Enum.sort(Ecto.Migrator.migrated_versions(repo)) == applied -- [dev_version]
+      assert %{rows: [[0]]} = repo.query!("EXISTS TABLE events")
+
+      Ecto.Migrator.run(repo, ctx.migrations, :up, all: true, log: false)
+      assert %{rows: [[1]]} = repo.query!("EXISTS TABLE events")
+    end
+
     test "--check refuses while a dev migration is still there", ctx do
       run(["--dev"], ctx)
 

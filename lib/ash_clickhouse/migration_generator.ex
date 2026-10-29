@@ -385,6 +385,8 @@ defmodule AshClickhouse.MigrationGenerator do
   defp roll_back_dev_migrations(dev_migrations, repo) do
     {:ok, _, _} =
       Ecto.Migrator.with_repo(repo, fn repo ->
+        AshClickhouse.Mix.Helpers.ensure_deletable_schema_migrations!(repo, nil)
+
         {repo, query, query_opts} =
           Ecto.Migration.SchemaMigration.versions(repo, repo.config(), nil)
 
