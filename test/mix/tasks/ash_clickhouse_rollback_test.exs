@@ -52,4 +52,34 @@ defmodule AshClickhouse.RollbackTest do
 
     assert %{rows: [[0]]} = ctx.repo.query!("EXISTS TABLE rollback_probe")
   end
+
+  test "a TinyLog schema_migrations becomes a MergeTree before the rollback deletes from it",
+       ctx do
+    on_exit(fn ->
+      AshClickhouse.Mix.Helpers.ensure_deletable_schema_migrations!(ctx.repo, nil)
+    end)
+
+    Ecto.Migrator.run(ctx.repo, ctx.dir, :up, all: true, log: false)
+
+    ctx.repo.query!(
+      "CREATE OR REPLACE TABLE schema_migrations ENGINE = TinyLog AS SELECT * FROM schema_migrations"
+    )
+
+    applied = Enum.sort(Ecto.Migrator.migrated_versions(ctx.repo))
+
+    Mix.shell(Mix.Shell.Process)
+    send(self(), {:mix_shell_input, :prompt, "1"})
+
+    AshClickhouse.DataLayer.rollback([])
+
+    assert %{rows: [["MergeTree"]]} =
+             ctx.repo.query!(
+               "SELECT engine FROM system.tables WHERE database = currentDatabase() AND name = 'schema_migrations'"
+             )
+
+    assert Enum.sort(Ecto.Migrator.migrated_versions(ctx.repo)) ==
+             applied -- [String.to_integer(@version)]
+
+    assert %{rows: [[0]]} = ctx.repo.query!("EXISTS TABLE rollback_probe")
+  end
 end

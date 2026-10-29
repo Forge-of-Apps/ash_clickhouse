@@ -7,7 +7,12 @@ defmodule Mix.Tasks.AshClickhouse.Rollback do
   use Mix.Task
 
   import AshClickhouse.Mix.Helpers,
-    only: [migrations_path: 2, tenant_migrations_path: 2, tenants: 2]
+    only: [
+      ensure_deletable_schema_migrations!: 2,
+      migrations_path: 2,
+      tenant_migrations_path: 2,
+      tenants: 2
+    ]
 
   @shortdoc "Rolls back the repository migrations for all repositories in the provided (or configured) domains"
 
@@ -89,6 +94,9 @@ defmodule Mix.Tasks.AshClickhouse.Rollback do
     if opts[:tenants] do
       for repo <- repos do
         for tenant <- tenants(repo, opts) do
+          {:ok, _, _} =
+            Ecto.Migrator.with_repo(repo, &ensure_deletable_schema_migrations!(&1, tenant))
+
           Mix.Task.reenable("ecto.rollback")
           rest_opts = AshClickhouse.Mix.Helpers.delete_arg(rest_opts, "--prefix")
 
@@ -102,6 +110,9 @@ defmodule Mix.Tasks.AshClickhouse.Rollback do
       end
     else
       for repo <- repos do
+        {:ok, _, _} =
+          Ecto.Migrator.with_repo(repo, &ensure_deletable_schema_migrations!(&1, opts[:prefix]))
+
         Mix.Task.run(
           "ecto.rollback",
           ["-r", to_string(repo)] ++

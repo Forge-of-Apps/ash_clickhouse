@@ -188,6 +188,33 @@ defmodule AshClickhouse.Mix.Helpers do
     end
   end
 
+  @doc """
+  Recreates `schema_migrations` as a `MergeTree` if it is still the `TinyLog`
+  `ecto_ch` made it before `AshClickhouse.Repo` chose an engine, so a rollback
+  can delete the versions it takes back. `prefix` is the database, as
+  `--prefix` names it.
+  """
+  def ensure_deletable_schema_migrations!(repo, prefix) do
+    {repo, source} = Ecto.Migration.SchemaMigration.get_repo_and_source(repo, repo.config())
+
+    case repo.query!(
+           "SELECT engine FROM system.tables WHERE database = coalesce({$0:Nullable(String)}, currentDatabase()) AND name = {$1:String}",
+           [prefix, source]
+         ) do
+      %{rows: [["TinyLog"]]} ->
+        table = Enum.map_join(List.wrap(prefix) ++ [source], ".", &"`#{&1}`")
+
+        repo.query!(
+          "CREATE OR REPLACE TABLE #{table} ENGINE = MergeTree ORDER BY version AS SELECT * FROM #{table}"
+        )
+
+        :ok
+
+      %{rows: _} ->
+        :ok
+    end
+  end
+
   def migrations_path(opts, repo) do
     opts[:migrations_path] || repo.config()[:migrations_path] || derive_migrations_path(repo)
   end
